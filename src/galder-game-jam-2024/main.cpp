@@ -64,7 +64,7 @@ int main(int argc, char **argv)
     auto injector = buildInjector(l, window);
     App app = injector.create<App>();
     ggj::ILogger &logger = app.logger;
-    app.window.SetTitle("Galder Game Jam 2023");
+    app.window.SetTitle("Galder Game Jam 2024");
 
     logger.information(fmt::format("Content path: {0}", app.executableInfo.getContentRootDirectory().string()));
     //Initialize everything

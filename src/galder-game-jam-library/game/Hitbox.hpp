@@ -2,8 +2,8 @@
 // Created by robin on 05.11.23.
 //
 
-#ifndef GALDER_GAME_JAM_2023_PROJECT_HITBOX_HPP
-#define GALDER_GAME_JAM_2023_PROJECT_HITBOX_HPP
+#ifndef GALDER_GAME_JAM_2024_PROJECT_HITBOX_HPP
+#define GALDER_GAME_JAM_2024_PROJECT_HITBOX_HPP
 
 #include "raylib-cpp.hpp"
 #include "box2d/box2d.h"
@@ -104,4 +104,4 @@ namespace ggj
     
 } // ggj
 
-#endif //GALDER_GAME_JAM_2023_PROJECT_HITBOX_HPP
+#endif //GALDER_GAME_JAM_2024_PROJECT_HITBOX_HPP
