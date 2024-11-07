@@ -69,22 +69,37 @@ namespace ggj
             {
                 m_velocity = raylib::Vector2{0.f, m_velocity.y};
             }
+
+            if(m_inputManager.keyDown(KeyboardKey::Up) && !m_inputManager.keyDown(KeyboardKey::Down))
+            {
+                m_velocity = raylib::Vector2{m_velocity.x, -7.f};
+                setPlayerState(PlayerState::Walk);
+            }
+            else if(m_inputManager.keyDown(KeyboardKey::Down) && !m_inputManager.keyDown(KeyboardKey::Up))
+            {
+                m_velocity = raylib::Vector2{m_velocity.x, 7.f};
+                setPlayerState(PlayerState::Walk);
+            }
+            else
+            {
+                m_velocity = raylib::Vector2{m_velocity.x, 0.f};
+            }
         }
 
-        //Jump
-        if(m_inputManager.keyPressed(KeyboardKey::Up) && m_jumps < m_maxJumps)
-        {
-            ++m_jumps;
-            m_velocity = raylib::Vector2{m_velocity.x, m_velocity.y - 5.f};
-        }
+        // //Jump
+        // if(m_inputManager.keyPressed(KeyboardKey::Up) && m_jumps < m_maxJumps)
+        // {
+        //     ++m_jumps;
+        //     m_velocity = raylib::Vector2{m_velocity.x, m_velocity.y - 5.f};
+        // }
         
         if(m_inputManager.keyPressed(KeyboardKey::K) && !m_isAttacking)
         {
-            if(m_velocity.y > 0.2f || m_velocity.y < -0.2f)
-                setPlayerState(PlayerState::AttackAir);
-            else
-                setPlayerState(PlayerState::AttackGrounded);
-            
+            // if(m_velocity.y > 0.2f || m_velocity.y < -0.2f)
+            //     setPlayerState(PlayerState::AttackAir);
+            // else
+            //     setPlayerState(PlayerState::AttackGrounded);
+            //
             m_isAttacking = true;
             m_attackCounter = 0;
         }
@@ -118,13 +133,15 @@ namespace ggj
             if(m_velocity.x == 0 && m_velocity.y == 0)
             {
                 setPlayerState(PlayerState::Idle);
-            } else if(m_velocity.y > 0.2f)
-            {
-                setPlayerState(PlayerState::Fall);
-            } else if(m_velocity.y < -0.2f)
-            {
-                setPlayerState(PlayerState::Jump);
             }
+            // else if(m_velocity.y > 0.2f)
+            // {
+            //     setPlayerState(PlayerState::Fall);
+            // }
+            // else if(m_velocity.y < -0.2f)
+            // {
+            //     setPlayerState(PlayerState::Jump);
+            // }
         }
         
         if(m_isAttacking)
