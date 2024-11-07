@@ -97,6 +97,8 @@ namespace ggj
         add(ggj::ResourceName::GraphicsTilesObjects, "graphics/tiles/objects.png");
         add(ggj::ResourceName::GraphicsCoin, "graphics/coin/coin_full.png");
         add(ggj::ResourceName::GraphicsPortal, "graphics/portal/portalRings.png");
+
+        add(ggj::ResourceName::TopDownForest, "graphics/tiles/complete-top-down_32x32.png");
     }
 
     template<class T>

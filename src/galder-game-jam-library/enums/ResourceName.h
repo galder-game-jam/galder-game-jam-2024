@@ -86,6 +86,8 @@ namespace ggj
         GraphicsTilesObjects = 176,
         GraphicsCoin = 177,
         GraphicsPortal = 178,
+
+        TopDownForest = 200
     };
 }
 

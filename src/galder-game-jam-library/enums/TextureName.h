@@ -72,6 +72,8 @@ namespace ggj
         TilesObjects = 176,
         Coin = 177,
         Portal = 178,
+
+        TopDownForest = 200
     };
 }
 #endif //GAME_DEV_TEMPLATE_TEXTURENAME_H
