@@ -100,7 +100,7 @@ namespace ggj
             //     setPlayerState(PlayerState::AttackAir);
             // else
             //     setPlayerState(PlayerState::AttackGrounded);
-            
+            setPlayerState(PlayerState::AttackGrounded);
             m_isAttacking = true;
             m_attackCounter = 0;
         }
