@@ -2283,12 +2283,12 @@
                         {
                          "name":"sprite_size_x",
                          "type":"int",
-                         "value":46
+                         "value":64
                         }, 
                         {
                          "name":"sprite_size_y",
                          "type":"int",
-                         "value":50
+                         "value":64
                         }, 
                         {
                          "name":"userdata_objecttype",
