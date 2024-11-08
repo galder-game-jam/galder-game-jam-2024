@@ -73,7 +73,9 @@ namespace ggj
         Coin = 177,
         Portal = 178,
 
-        TopDownForest = 200
+        TopDownForest = 200,
+        RoguePlayer = 201,
+        WizardPlayer = 202
     };
 }
 #endif //GAME_DEV_TEMPLATE_TEXTURENAME_H

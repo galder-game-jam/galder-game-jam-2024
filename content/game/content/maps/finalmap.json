@@ -120,7 +120,7 @@
                         {
                          "name":"sprite",
                          "type":"string",
-                         "value":"player-spritemap-bluepants.png"
+                         "value":"Rogue.png"
                         }, 
                         {
                          "name":"sprite_size_x",
@@ -1732,7 +1732,7 @@
                         {
                          "name":"sprite",
                          "type":"string",
-                         "value":"player-spritemap-redpants.png"
+                         "value":"Wizard.png"
                         }, 
                         {
                          "name":"sprite_size_x",
@@ -5544,7 +5544,7 @@
          "value":30
         }],
  "renderorder":"left-down",
- "tiledversion":"1.10.2",
+ "tiledversion":"1.11.0",
  "tileheight":16,
  "tilesets":[
         {
@@ -5588,6 +5588,6 @@
         }],
  "tilewidth":16,
  "type":"map",
- "version":"1.10",
+ "version":"1.11",
  "width":50
 }
