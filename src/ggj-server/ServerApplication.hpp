@@ -44,13 +44,24 @@ namespace ggj
             
             void draw() override
             {
-            
+                m_renderTexture.BeginMode();
+                m_window.ClearBackground(m_backgroundColor);
+                m_renderTexture.EndMode();
+                
+                render();
             }
         
         private:
             void render()
             {
-            
+                float scale = std::min((float)m_window.GetWidth()/m_originalWindowSize.x, (float)m_window.GetHeight()/m_originalWindowSize.y);
+                BeginDrawing();
+                m_window.ClearBackground(BLACK);
+                DrawTexturePro(m_renderTexture.texture, raylib::Rectangle( 0.0f, 0.0f, (float)m_renderTexture.texture.width, (float)-m_renderTexture.texture.height ),
+                               raylib::Rectangle( ((float)m_window.GetWidth() - ((float)m_originalWindowSize.x*scale))*0.5f, ((float)m_window.GetHeight() - ((float)m_originalWindowSize.y*scale))*0.5f,
+                                                  (float)m_originalWindowSize.x*scale, (float)m_originalWindowSize.y*scale ), { 0, 0 }, 0.0f, WHITE);
+                m_debugManager.draw();
+                EndDrawing();
             }
             
             raylib::Window &m_window;
@@ -58,6 +69,8 @@ namespace ggj
             IInputManager<ggj::KeyboardKey> &m_input;
             IDebugManager &m_debugManager;
             ggj::IIpAddressResolver &m_ipResolver;
+            raylib::Color m_backgroundColor = raylib::Color();
+            
             
             raylib::Vector2 m_originalWindowSize;
             raylib::RenderTexture2D m_renderTexture;
