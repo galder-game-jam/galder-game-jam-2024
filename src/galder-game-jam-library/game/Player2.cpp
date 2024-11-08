@@ -20,9 +20,8 @@ namespace ggj
 
         if(m_isDead)
         {
-            m_isDead = false;
             setPlayerState(PlayerState::Dead);
-            m_body->SetTransform(ConvertToB2Vec2(m_startPos), m_body->GetAngle());
+            m_body->SetEnabled(false);
         }
         PhysicsObject::update(timeDelta);
 
@@ -41,6 +40,20 @@ namespace ggj
 
     void Player2::handleInputs(float timeDelta)
     {
+        if(m_isDead)
+        {
+            if(m_inputManager.keyDown(KeyboardKey::J))
+            {
+                m_body->SetTransform(ConvertToB2Vec2(m_startPos), m_body->GetAngle());
+                setPlayerState(PlayerState::Idle);
+                m_isDead = false;
+                m_hitbox.setIsActive(true);
+                m_body->SetEnabled(true);
+            }
+            else
+                return;
+        }
+
         //Should have a collection of commands or something assigned to the player for a best practice approach
         //But this is just meant to be a quick example
         b2Vec2 vel = m_body->GetLinearVelocity();
@@ -89,11 +102,6 @@ namespace ggj
         
         if(m_inputManager.keyPressed(KeyboardKey::K) && !m_isAttacking)
         {
-            // if(m_velocity.y > 0.2f || m_velocity.y < -0.2f)
-            //     setPlayerState(PlayerState::AttackAir);
-            // else
-            //     setPlayerState(PlayerState::AttackGrounded);
-            //
             setPlayerState(PlayerState::AttackGrounded);
             m_isAttacking = true;
             m_attackCounter = 0;
@@ -129,14 +137,6 @@ namespace ggj
             {
                 setPlayerState(PlayerState::Idle);
             }
-            // else if(m_velocity.y > 0.2f)
-            // {
-            //     setPlayerState(PlayerState::Fall);
-            // }
-            // else if(m_velocity.y < -0.2f)
-            // {
-            //     setPlayerState(PlayerState::Jump);
-            // }
         }
         
         if(m_isAttacking)
