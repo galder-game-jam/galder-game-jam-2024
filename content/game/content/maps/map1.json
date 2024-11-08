@@ -439,7 +439,7 @@
                         {
                          "name":"sprite",
                          "type":"string",
-                         "value":"player-spritemap-bluepants.png"
+                         "value":"Rogue.png"
                         }, 
                         {
                          "name":"sprite_size_x",
