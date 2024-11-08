@@ -21,6 +21,7 @@ namespace ggj
         if(m_isDead)
         {
             m_isDead = false;
+            setPlayerState(PlayerState::Dead);
             m_body->SetTransform(ConvertToB2Vec2(m_startPos), m_body->GetAngle());
         }
         PhysicsObject::update(timeDelta);
@@ -85,13 +86,6 @@ namespace ggj
                 m_velocity = raylib::Vector2{m_velocity.x, 0.f};
             }
         }
-
-        // //Jump
-        // if(m_inputManager.keyPressed(KeyboardKey::Up) && m_jumps < m_maxJumps)
-        // {
-        //     ++m_jumps;
-        //     m_velocity = raylib::Vector2{m_velocity.x, m_velocity.y - 5.f};
-        // }
         
         if(m_inputManager.keyPressed(KeyboardKey::K) && !m_isAttacking)
         {

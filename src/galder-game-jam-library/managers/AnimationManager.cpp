@@ -210,9 +210,9 @@ namespace ggj
                 };
         m_animations[AnimationName::PlayerIdleNG] =
                 {
-                        raylib::Vector2(46, 50),
+                        raylib::Vector2(64, 64),
                         {
-                                {raylib::Vector2(46 * 0,0), 100},
+                                {raylib::Vector2(64 * 0,0), 100},
                         }
                 };
         m_animations[AnimationName::PlayerWalkNG] =
@@ -227,44 +227,6 @@ namespace ggj
                                 {raylib::Vector2(46 * 5, 50 * 3), 100},
                                 {raylib::Vector2(46 * 6, 50 * 3), 100},
                                 {raylib::Vector2(46 * 7, 50 * 3), 100},
-                        }
-                };
-        m_animations[AnimationName::PlayerJumpNG] =
-                {
-                        raylib::Vector2(46, 50),
-                        {
-                                {raylib::Vector2(46 * 6,0), 300},
-                                {raylib::Vector2(46 * 7,0), 300},
-                        }
-                };
-
-        m_animations[AnimationName::PlayerFallNG] =
-                {
-                        raylib::Vector2(46, 50),
-                        {
-                                {raylib::Vector2(46 * 4,50 * 1), 100},
-                        }
-                };
-        
-        m_animations[AnimationName::PlayerAttackGroundedNG] =
-                {
-                        raylib::Vector2(46, 50),
-                        {
-                                {raylib::Vector2(46 * 2, 50 * 0), 100},
-                                {raylib::Vector2(46 * 3, 50 * 0), 100},
-                                {raylib::Vector2(46 * 4, 50 * 0), 100},
-                                {raylib::Vector2(46 * 5, 50 * 0), 100},
-                        }
-                };
-        
-        m_animations[AnimationName::PlayerAttackAirNG] =
-                {
-                        raylib::Vector2(46, 50),
-                        {
-                                {raylib::Vector2(46 * 2, 50 * 1), 100},
-                                {raylib::Vector2(46 * 3, 50 * 1), 100},
-                                {raylib::Vector2(46 * 4, 50 * 1), 100},
-                                {raylib::Vector2(46 * 5, 50 * 1), 100},
                         }
                 };
 
@@ -290,11 +252,64 @@ namespace ggj
                 {
                     raylib::Vector2(64, 64),
                     {
-                                        {raylib::Vector2(64 * 0, 64 * 1), 100},
-                                        {raylib::Vector2(64 * 1, 50 * 1), 100},
-                                        {raylib::Vector2(64 * 2, 50 * 1), 100},
-                                        {raylib::Vector2(64 * 3, 50 * 1), 100},
-                                }
+                                                {raylib::Vector2(64 * 0, 64 * 1), 100},
+                                                {raylib::Vector2(64 * 1, 64 * 1), 100},
+                                                {raylib::Vector2(64 * 2, 64 * 1), 100},
+                                                {raylib::Vector2(64 * 3, 64 * 1), 100},
+                                        }
+                };
+
+            m_animations[AnimationName::RogueRun] =
+                {
+                    raylib::Vector2(64, 64),
+                    {
+                                                {raylib::Vector2(64 * 0, 64 * 0), 100},
+                                                {raylib::Vector2(64 * 1, 64 * 0), 100},
+                                                {raylib::Vector2(64 * 2, 64 * 0), 100},
+                                                {raylib::Vector2(64 * 3, 64 * 0), 100},
+                                                {raylib::Vector2(64 * 4, 64 * 0), 100},
+                                                {raylib::Vector2(64 * 5, 64 * 0), 100},
+                                        }
+                };
+
+            m_animations[AnimationName::RogueDeath] =
+                {
+                    raylib::Vector2(64, 64),
+                    {
+                                                        {raylib::Vector2(64 * 0, 64 * 2), 100},
+                                                        {raylib::Vector2(64 * 1, 64 * 2), 100},
+                                                        {raylib::Vector2(64 * 2, 64 * 2), 100},
+                                                        {raylib::Vector2(64 * 3, 64 * 2), 100},
+                                                        {raylib::Vector2(64 * 4, 64 * 2), 100},
+                                                        {raylib::Vector2(64 * 5, 64 * 2), 100000},
+                                                }
+                };
+
+            m_animations[AnimationName::RogueAttackStab] =
+                {
+                    raylib::Vector2(64, 64),
+                    {
+                                                                {raylib::Vector2(64 * 0, 64 * 4), 100},
+                                                                {raylib::Vector2(64 * 1, 64 * 4), 200},
+                                                                {raylib::Vector2(64 * 2, 64 * 4), 300},
+                                                                {raylib::Vector2(64 * 3, 64 * 4), 200},
+                                                                {raylib::Vector2(64 * 4, 64 * 4), 100},
+                                                                {raylib::Vector2(64 * 5, 64 * 4), 100},
+                                                        }
+                };
+
+            m_animations[AnimationName::RogueAttackSwing] =
+                {
+                    raylib::Vector2(64, 64),
+                    {
+                                                                {raylib::Vector2(64 * 0, 64 * 3), 100},
+                                                                {raylib::Vector2(64 * 1, 64 * 3), 40},
+                                                                {raylib::Vector2(64 * 2, 64 * 3), 40},
+                                                                {raylib::Vector2(64 * 3, 64 * 3), 40},
+                                                                {raylib::Vector2(64 * 4, 64 * 3), 40},
+                                                                {raylib::Vector2(64 * 5, 64 * 3), 40},
+                                                                {raylib::Vector2(64 * 6, 64 * 3), 100},
+                                                        }
                 };
         return true;
     }

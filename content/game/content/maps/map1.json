@@ -195,7 +195,6 @@
                         }, 
                         {
                          "name":"userdata_objecttype_enum",
-                         "propertytype":"ObjectType",
                          "type":"int",
                          "value":6
                         }],
@@ -239,7 +238,6 @@
                         }, 
                         {
                          "name":"userdata_objecttype_enum",
-                         "propertytype":"ObjectType",
                          "type":"int",
                          "value":5
                         }],
@@ -283,7 +281,6 @@
                         }, 
                         {
                          "name":"userdata_objecttype_enum",
-                         "propertytype":"ObjectType",
                          "type":"int",
                          "value":5
                         }],
@@ -327,7 +324,6 @@
                         }, 
                         {
                          "name":"userdata_objecttype_enum",
-                         "propertytype":"ObjectType",
                          "type":"int",
                          "value":5
                         }],
@@ -390,7 +386,7 @@
                         {
                          "name":"sprite",
                          "type":"string",
-                         "value":"player-spritemap-redpants.png"
+                         "value":"Wizard.png"
                         }, 
                         {
                          "name":"sprite_size_x",
@@ -409,7 +405,6 @@
                         }, 
                         {
                          "name":"userdata_objecttype_enum",
-                         "propertytype":"ObjectType",
                          "type":"int",
                          "value":1
                         }],
@@ -458,7 +453,6 @@
                         }, 
                         {
                          "name":"userdata_objecttype_enum",
-                         "propertytype":"ObjectType",
                          "type":"int",
                          "value":1
                         }],
@@ -727,6 +721,6 @@
         }],
  "tilewidth":32,
  "type":"map",
- "version":"1.11",
+ "version":"1.10",
  "width":60
 }

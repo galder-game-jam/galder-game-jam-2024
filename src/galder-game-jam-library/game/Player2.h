@@ -32,6 +32,7 @@ namespace ggj
                 raylib::Vector2 hitboxPos = PhysicsObject::ConvertToVector2(m_body->GetPosition());
                 hitboxPos = raylib::Vector2(hitboxPos.GetX() + 16, hitboxPos.y);
                 m_hitbox.create(this, m_body->GetWorld(), hitboxPos, {16, 16});
+                setPlayerState(PlayerState::Idle);
             }
 
             [[nodiscard]] const Vector2 &getVelocity() const;
@@ -54,7 +55,7 @@ namespace ggj
             bool m_cameraShouldFollowPlayer {true};
             Animation m_animation;
             IMapper &m_mapper;
-            PlayerState m_playerState{PlayerState::Idle};
+            PlayerState m_playerState{PlayerState::Dead};
 
             raylib::Vector2 m_startPos{};
             bool m_hasClearedLevel {false};

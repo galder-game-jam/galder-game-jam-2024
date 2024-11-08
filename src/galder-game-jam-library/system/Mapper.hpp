@@ -168,17 +168,13 @@ namespace ggj
                     case PlayerState::Idle:
                         return AnimationName::RogueIdle;
                     case PlayerState::Walk:
-                        return AnimationName::PlayerWalkNG;
-                    case PlayerState::Jump:
-                        return AnimationName::PlayerJumpNG;
-                    case PlayerState::Fall:
-                        return AnimationName::PlayerFallNG;
+                        return AnimationName::RogueRun;
                     case PlayerState::AttackGrounded:
-                        return AnimationName::PlayerAttackGroundedNG;
-                    case PlayerState::AttackAir:
-                        return AnimationName::PlayerAttackAirNG;
+                        return AnimationName::RogueAttackSwing;
+                    case PlayerState::Dead:
+                        return AnimationName::RogueDeath;
                     default:
-                        return AnimationName::None;
+                        return AnimationName::RogueIdle;
                 }
             }
 
