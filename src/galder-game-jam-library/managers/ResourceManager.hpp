@@ -99,6 +99,8 @@ namespace ggj
         add(ggj::ResourceName::GraphicsPortal, "graphics/portal/portalRings.png");
 
         add(ggj::ResourceName::TopDownForest, "graphics/tiles/complete-top-down_32x32.png");
+        add(ggj::ResourceName::RoguePlayer, "graphics/player/Rogue.png");
+        add(ggj::ResourceName::WizardPlayer, "graphics/player/Wizard.png");
     }
 
     template<class T>
