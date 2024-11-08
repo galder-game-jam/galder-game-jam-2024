@@ -33,7 +33,10 @@ namespace ggj
         PlayerFallNG = 20,
         PowerUpCycle = 21,
         PlayerAttackGroundedNG = 22,
-        PlayerAttackAirNG = 23
+        PlayerAttackAirNG = 23,
+        RogueIdle = 24,
+        RogueRun = 25,
+        RogueDeath = 26,
     };
 
 } // ggj

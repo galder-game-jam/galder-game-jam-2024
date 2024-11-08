@@ -166,7 +166,7 @@ namespace ggj
                 switch (playerState)
                 {
                     case PlayerState::Idle:
-                        return AnimationName::PlayerIdleNG;
+                        return AnimationName::RogueIdle;
                     case PlayerState::Walk:
                         return AnimationName::PlayerWalkNG;
                     case PlayerState::Jump:

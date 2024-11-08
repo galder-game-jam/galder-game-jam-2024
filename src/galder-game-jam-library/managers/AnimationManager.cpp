@@ -285,6 +285,17 @@ namespace ggj
                                 {raylib::Vector2(50 * 10, 50 * 5), 70},
                         }
                 };
+
+            m_animations[AnimationName::RogueIdle] =
+                {
+                    raylib::Vector2(64, 64),
+                    {
+                                        {raylib::Vector2(64 * 0, 64 * 1), 100},
+                                        {raylib::Vector2(64 * 1, 50 * 1), 100},
+                                        {raylib::Vector2(64 * 2, 50 * 1), 100},
+                                        {raylib::Vector2(64 * 3, 50 * 1), 100},
+                                }
+                };
         return true;
     }
 } // ggj
