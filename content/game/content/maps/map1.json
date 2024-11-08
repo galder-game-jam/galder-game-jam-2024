@@ -350,29 +350,6 @@
          "name":"objects",
          "objects":[
                 {
-                 "height":92.244444444444,
-                 "id":6,
-                 "name":"",
-                 "properties":[
-                        {
-                         "name":"userdata_objecttype",
-                         "type":"int",
-                         "value":2
-                        }, 
-                        {
-                         "name":"userdata_objecttype_enum",
-                         "propertytype":"ObjectType",
-                         "type":"int",
-                         "value":2
-                        }],
-                 "rotation":0,
-                 "type":"PhysicsObject",
-                 "visible":true,
-                 "width":1920,
-                 "x":0,
-                 "y":1920
-                }, 
-                {
                  "height":2007.51515151515,
                  "id":27,
                  "name":"",
@@ -524,6 +501,17 @@
                  "width":61,
                  "x":576,
                  "y":384
+                }, 
+                {
+                 "height":30.0379,
+                 "id":369,
+                 "name":"",
+                 "rotation":0,
+                 "type":"PhysicsObject",
+                 "visible":true,
+                 "width":1952.61,
+                 "x":0,
+                 "y":1920
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -603,18 +591,18 @@
          "y":0
         }],
  "nextlayerid":10,
- "nextobjectid":369,
+ "nextobjectid":370,
  "orientation":"orthogonal",
  "properties":[
         {
          "name":"camera_max_x",
          "type":"float",
-         "value":660
+         "value":1120
         }, 
         {
          "name":"camera_max_y",
          "type":"float",
-         "value":960
+         "value":1320
         }, 
         {
          "name":"camera_min_x",
