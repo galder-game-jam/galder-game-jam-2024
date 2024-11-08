@@ -11,10 +11,10 @@ Building
   * Visual Studio 2017 or later
 * One of the following crypto solutions:
   * OpenSSL 1.1.1 or later
-  * libsodium
+  * libsodium (can cause issues on Intel machines with AES-NI disabled see [here](https://github.com/ValveSoftware/GameNetworkingSockets/issues/243))
   * [bcrypt](https://docs.microsoft.com/en-us/windows/desktop/api/bcrypt/)
     (Windows only.  Note the primary reason this is supported is to satisfy
-    an Xbox requuirement.)
+    an Xbox requirement.)
 * Google protobuf 2.6.1+
 * Google [webrtc](https://opensource.google/projects/webrtc) is used for
   NAT piercing (ICE) for P2P connections.  The relevant code is linked in as a
@@ -63,7 +63,7 @@ for more.
 
 ## Windows / Visual Studio
 
-To build gamenetworkingsockets on Windows, it's recommended to obtain thge dependencies by using vcpkg in ["manifest mode"](https://vcpkg.readthedocs.io/en/latest/users/manifests/).  The following instructions assume that you will follow the vcpkg recommendations and install vcpkg as a subfolder.  If you want to use "classic mode" or install vcpkg somewhere else, you're on your own.
+To build gamenetworkingsockets on Windows, it's recommended to obtain thge dependencies by using vcpkg in ["manifest mode"](https://learn.microsoft.com/en-us/vcpkg/concepts/manifest-mode).  The following instructions assume that you will follow the vcpkg recommendations and install vcpkg as a subfolder.  If you want to use "classic mode" or install vcpkg somewhere else, you're on your own.
 
 If you don't want to use vcpkg, try the [manual instructions](BUILDING_WINDOWS_MANUAL.md).
 
@@ -128,7 +128,7 @@ $ brew install protobuf
 ## MSYS2
 
 You can also build this project on [MSYS2](https://www.msys2.org). First,
-follow the [instructions](https://github.com/msys2/msys2/wiki/MSYS2-installation) on the
+follow the [instructions](https://www.msys2.org/wiki/MSYS2-installation) on the
 MSYS2 website for updating your MSYS2 install.
 
 **Be sure to follow the instructions at the site above to update MSYS2 before

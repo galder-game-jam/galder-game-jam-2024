@@ -15,4 +15,8 @@ add_library(galder-game-jam-library GalderGameJamLibrary.h managers/GameManager.
         game/enemies/Snake.cpp game/enemies/Snake.h game/collectibles/Coin.cpp game/collectibles/Coin.h
         game/enemies/Spider.cpp game/enemies/Spider.h game/enemies/Thing.cpp game/enemies/Thing.h
         game/enemies/Ghost.cpp game/enemies/Ghost.h game/interactables/Portal.cpp game/interactables/Portal.h
-        game/interactables/PowerUp.cpp game/interactables/PowerUp.h game/Hitbox.hpp)
+        game/interactables/PowerUp.cpp game/interactables/PowerUp.h game/Hitbox.hpp
+        data/PlayerNetworkData.hpp
+        data/ServerNetworkData.hpp
+        network/GalderClient.hpp
+        network/GalderServer.hpp)

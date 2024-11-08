@@ -1,4 +1,5 @@
-# GameNetworkingSockets [![Build Status](https://github.com/ValveSoftware/GameNetworkingSockets/workflows/CI/badge.svg)](https://github.com/ValveSoftware/GameNetworkingSockets/actions)
+# GameNetworkingSockets
+[![Windows, Ubuntu](https://github.com/ValveSoftware/GameNetworkingSockets/actions/workflows/build.yml/badge.svg)](https://github.com/ValveSoftware/GameNetworkingSockets/actions)  [![MacOS](https://github.com/ValveSoftware/GameNetworkingSockets/actions/workflows/macos.yml/badge.svg)](https://github.com/ValveSoftware/GameNetworkingSockets/actions) [![Linux flavors](https://github.com/ValveSoftware/GameNetworkingSockets/actions/workflows/linux-flavors.yml/badge.svg)](https://github.com/ValveSoftware/GameNetworkingSockets/actions)
 
 GameNetworkingSockets is a basic transport layer for games.  The features are:
 
@@ -83,6 +84,8 @@ Third party language bindings:
   * <https://github.com/Facepunch/Facepunch.Steamworks>
 * Go:
   * <https://github.com/nielsAD/gns/>
+* Rust:
+  * <https://github.com/hussein-aitlahcen/gns-rs>
 
 ## Why do I see "Steam" everywhere?
 

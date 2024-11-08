@@ -55,10 +55,19 @@ int testNetworking()
     if(!app.initialize())
         app.logger.critical("App initialization failed!");
     
-    std::string localIp = fmt::format("Local IP: {0}", app.ipResolver.getLocalIpAddress());
-    std::string publicIp = fmt::format("Public IP: {0}", app.ipResolver.getPublicIpAddress());
-    logger.information(localIp);
-    logger.information(publicIp);
+    SetTargetFPS(60);
+    ggj::Timer timer;
+    while (!window.ShouldClose())
+    {
+        float timeDelta = timer.secondsElapsed();
+        app.server.update(timeDelta);
+        timer.restart();
+        app.server.draw();
+    }
+//    std::string localIp = fmt::format("Local IP: {0}", app.ipResolver.getLocalIpAddress());
+//    std::string publicIp = fmt::format("Public IP: {0}", app.ipResolver.getPublicIpAddress());
+//    logger.information(localIp);
+//    logger.information(publicIp);
     
     return 0;
 }

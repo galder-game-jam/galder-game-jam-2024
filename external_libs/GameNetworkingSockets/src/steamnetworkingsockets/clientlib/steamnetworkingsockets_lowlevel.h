@@ -14,11 +14,6 @@
 #include <tier1/utlhashmap.h>
 #include "../steamnetworkingsockets_internal.h"
 
-// Comment this in to enable Windows event tracing
-//#ifdef _WINDOWS
-//	#define STEAMNETWORKINGSOCKETS_ENABLE_ETW
-//#endif
-
 // Set STEAMNETWORKINGSOCKETS_LOCK_DEBUG_LEVEL.
 // NOTE: Currently only 0 or 1 is allowed.  Later we might add more flexibility
 #ifndef STEAMNETWORKINGSOCKETS_LOCK_DEBUG_LEVEL
@@ -51,8 +46,20 @@ struct RecvPktInfo_t
 	//SteamNetworkingMicroseconds m_usecRecvMin; // Earliest possible time when the packet might have actually arrived
 	//SteamNetworkingMicroseconds m_usecRecvMax; // Latest possible time when the packet might have actually arrived
 	netadr_t m_adrFrom;
+	bool m_bQueuedForOutOfOrder; // True if we are re-processing the message after receiving it once and partially processing it, then shunting into a queue.
+	uint8 m_tos; // IP header TOS value that was received.  Will be 0xff if we don't know.
 	IRawUDPSocket *m_pSock;
 };
+
+// Called from BCheckOutOfOrderPacket when it looks like we might need to take special action to
+// deal with correcting out-of-order packets.  Should not be called directly
+enum class EHandleOutOfOrder
+{
+	AbortProcessing,
+	ContinueProcessing,
+	CorrectedContinueProcessing
+};
+extern EHandleOutOfOrder HandleOutOfOrderPacket( uint16 nWireSeqNum, LinkStatsTrackerBase &flowStats, const RecvPktInfo_t &ctx );
 
 /// Store the callback and its context together
 class CRecvPacketCallback
@@ -93,27 +100,27 @@ public:
 	/// Packets sent through this method are subject to fake loss (steamdatagram_fakepacketloss_send),
 	/// lag (steamdatagram_fakepacketlag_send and steamdatagram_fakepacketreorder_send), and
 	/// duplication (steamdatagram_fakepacketdup_send)
-	inline bool BSendRawPacket( const void *pPkt, int cbPkt, const netadr_t &adrTo ) const
+	inline bool BSendRawPacket( const void *pPkt, int cbPkt, const netadr_t &adrTo, int ecn = -1 ) const
 	{
 		iovec temp;
 		temp.iov_len = cbPkt;
 		temp.iov_base = (void *)pPkt;
-		return BSendRawPacketGather( 1, &temp, adrTo );
+		return BSendRawPacketGather( 1, &temp, adrTo, ecn );
 	}
-	inline bool BSendRawPacket( const void *pPkt, int cbPkt, const SteamNetworkingIPAddr &adrTo ) const
+	inline bool BSendRawPacket( const void *pPkt, int cbPkt, const SteamNetworkingIPAddr &adrTo, int ecn = -1 ) const
 	{
 		netadr_t netadrTo;
 		SteamNetworkingIPAddrToNetAdr( netadrTo, adrTo );
-		return BSendRawPacket( pPkt, cbPkt, netadrTo );
+		return BSendRawPacket( pPkt, cbPkt, netadrTo, ecn );
 	}
 
 	/// Gather-based send.  Simulated lag, loss, etc are applied
-	virtual bool BSendRawPacketGather( int nChunks, const iovec *pChunks, const netadr_t &adrTo ) const = 0;
-	inline bool BSendRawPacketGather( int nChunks, const iovec *pChunks, const SteamNetworkingIPAddr &adrTo ) const
+	virtual bool BSendRawPacketGather( int nChunks, const iovec *pChunks, const netadr_t &adrTo, int ecn = -1 ) const = 0;
+	inline bool BSendRawPacketGather( int nChunks, const iovec *pChunks, const SteamNetworkingIPAddr &adrTo, int ecn = -1 ) const
 	{
 		netadr_t netadrTo;
 		SteamNetworkingIPAddrToNetAdr( netadrTo, adrTo );
-		return BSendRawPacketGather( nChunks, pChunks, netadrTo );
+		return BSendRawPacketGather( nChunks, pChunks, netadrTo, ecn );
 	}
 
 	/// Logically close the socket.  This might not actually close the socket IMMEDIATELY,
@@ -191,15 +198,15 @@ class IBoundUDPSocket
 public:
 
 	/// Send a packet on this socket to the bound remote host
-	inline bool BSendRawPacket( const void *pPkt, int cbPkt ) const
+	inline bool BSendRawPacket( const void *pPkt, int cbPkt, int ecn = -1 ) const
 	{
-		return m_pRawSock->BSendRawPacket( pPkt, cbPkt, m_adr );
+		return m_pRawSock->BSendRawPacket( pPkt, cbPkt, m_adr, ecn );
 	}
 
 	/// Gather-based send to the bound remote host
-	inline bool BSendRawPacketGather( int nChunks, const iovec *pChunks ) const
+	inline bool BSendRawPacketGather( int nChunks, const iovec *pChunks, int ecn = -1 ) const
 	{
-		return m_pRawSock->BSendRawPacketGather( nChunks, pChunks, m_adr );
+		return m_pRawSock->BSendRawPacketGather( nChunks, pChunks, m_adr, ecn );
 	}
 
 	/// Close this socket and stop talking to the specified remote host
@@ -446,8 +453,31 @@ struct LockDebugInfo
 	static constexpr int k_nFlag_PollGroup = (1<<2);
 	static constexpr int k_nFlag_Table = (1<<4);
 
+	// When multiple locks are taken, there is potential for a deadlock.
+	// Locks taken in increasing order is always allowed, in decreasing
+	// order is never allowed.  In certain situations we allow locks
+	// of the same order to be taken.
+	enum {
+
+		// Global lock must always be taken first
+		k_nOrder_Global,
+
+		// Object locks (table, connection, poll group) can be taken in any
+		// order while holding the global lock.  Otherwise, you may not take
+		// more than one.
+		k_nOrder_ObjectOrTable,
+
+		// We might need to take a lock to queue callbacks while holding this.
+		k_nOrder_NetworkAndCachedRoutes,
+
+		// Short duration locks are usually the lowest priority and we usually
+		// should not take more than one of these at a time
+		k_nOrder_Max
+	};
+
 	const char *const m_pszName;
 	const int m_nFlags;
+	const int m_nOrder;
 
 	#if STEAMNETWORKINGSOCKETS_LOCK_DEBUG_LEVEL > 0
 		void _AssertHeldByCurrentThread( const char *pszFile, int line, const char *pszTag = nullptr ) const;
@@ -456,7 +486,7 @@ struct LockDebugInfo
 	#endif
 
 protected:
-	LockDebugInfo( const char *pszName, int nFlags ) : m_pszName( pszName ), m_nFlags( nFlags ) {}
+	LockDebugInfo( const char *pszName, int nFlags, int nOrder ) : m_pszName( pszName ), m_nFlags( nFlags ), m_nOrder( nOrder ) {}
 
 	#if STEAMNETWORKINGSOCKETS_LOCK_DEBUG_LEVEL > 0
 		void AboutToLock( bool bTry );
@@ -474,7 +504,7 @@ protected:
 template<typename TMutexImpl >
 struct Lock : LockDebugInfo
 {
-	inline Lock( const char *pszName, int nFlags ) : LockDebugInfo( pszName, nFlags ) {}
+	inline Lock( const char *pszName, int nFlags, int nOrder ) : LockDebugInfo( pszName, nFlags, nOrder ) {}
 	inline void lock( const char *pszTag = nullptr )
 	{
 		LockDebugInfo::AboutToLock( false );
@@ -566,11 +596,11 @@ private:
 // A very simple lock to protect short accesses to a small set of data.
 // Used when:
 // - We hold the lock for a brief period.
-// - We don't need to take any additional locks while already holding this one.
-//   (Including this lock -- e.g. we don't need to lock recursively.)
+// - We don't need to lock recursively.
+// - For most locks, we also don't allow taking of any other locks.  (In a few cases we use the order to mark which are allowed.)
 struct ShortDurationLock : Lock<ShortDurationMutexImpl>
 {
-	ShortDurationLock( const char *pszName ) : Lock<ShortDurationMutexImpl>( pszName, k_nFlag_ShortDuration ) {}
+	ShortDurationLock( const char *pszName, int nOrder ) : Lock<ShortDurationMutexImpl>( pszName, k_nFlag_ShortDuration, nOrder ) {}
 };
 using ShortDurationScopeLock = ScopeLock<ShortDurationLock>;
 
@@ -784,29 +814,6 @@ extern bool IsRouteToAddressProbablyLocal( netadr_t addr );
 
 extern bool ResolveHostname( const char* pszHostname, CUtlVector< SteamNetworkingIPAddr > *pAddrs );
 extern bool GetLocalAddresses( CUtlVector< SteamNetworkingIPAddr >* pAddrs );
-
-#ifdef STEAMNETWORKINGSOCKETS_ENABLE_ETW
-	extern void ETW_Init();
-	extern void ETW_Kill();
-	extern void ETW_LongOp( const char *opName, SteamNetworkingMicroseconds usec, const char *pszInfo = nullptr );
-	extern void ETW_UDPSendPacket( const netadr_t &adrTo, int cbPkt );
-	extern void ETW_UDPRecvPacket( const netadr_t &adrFrom, int cbPkt );
-	extern void ETW_ICESendPacket( HSteamNetConnection hConn, int cbPkt );
-	extern void ETW_ICERecvPacket( HSteamNetConnection hConn, int cbPkt );
-	extern void ETW_ICEProcessPacket( HSteamNetConnection hConn, int cbPkt );
-	extern void ETW_webrtc_setsockopt( int slevel, int sopt, int value );
-	extern void ETW_webrtc_send( int length );
-	extern void ETW_webrtc_sendto( void *addr, int length );
-#else
-	inline void ETW_Init() {}
-	inline void ETW_Kill() {}
-	inline void ETW_LongOp( const char *opName, SteamNetworkingMicroseconds usec, const char *pszInfo = nullptr ) {}
-	inline void ETW_UDPSendPacket( const netadr_t &adrTo, int cbPkt ) {}
-	inline void ETW_UDPRecvPacket( const netadr_t &adrFrom, int cbPkt ) {}
-	inline void ETW_ICESendPacket( HSteamNetConnection hConn, int cbPkt ) {}
-	inline void ETW_ICERecvPacket( HSteamNetConnection hConn, int cbPkt ) {}
-	inline void ETW_ICEProcessPacket( HSteamNetConnection hConn, int cbPkt ) {}
-#endif
 
 } // namespace SteamNetworkingSocketsLib
 
