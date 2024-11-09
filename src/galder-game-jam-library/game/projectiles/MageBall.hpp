@@ -16,8 +16,11 @@ namespace ggj
                      world, timeToLive, isVisible)
             {
                 m_animation = m_animationManager.getAnimation(AnimationName::MageBallFlightRed);
+                m_impactAnimation = m_animationManager.getAnimation(AnimationName::MageBallImpactRed);
             }
-
+            
+            
+            
             // static constexpr raylib::Vector2 DEFAULT_SIZE {16.f, 16.f};
             // static constexpr raylib::Vector2 DEFAULT_VELOCITY {25.f, 0.f};
             static constexpr float DEFAULT_SPEED {25.f};
