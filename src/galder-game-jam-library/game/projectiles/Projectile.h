@@ -25,6 +25,7 @@ namespace ggj
     
             void update(float timeDelta) override;
             void beginContact(PhysicsObject *a, PhysicsObject *b, b2Contact *contact) override;
+            void explode();
     
         protected:
             World *m_world{nullptr};

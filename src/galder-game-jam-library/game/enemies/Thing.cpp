@@ -1,4 +1,5 @@
 #include "Thing.h"
+#include "../projectiles/Projectile.h"
 
 namespace ggj
 {
@@ -26,7 +27,7 @@ namespace ggj
         {
             turn();
         }
-        if(userDataB->getObjectType() == ObjectType::Player)
+        else if(userDataB->getObjectType() == ObjectType::Player)
         {
             b2Body *body = b->getBody();
             const auto playerVelocity = b->getVelocity();
@@ -49,6 +50,12 @@ namespace ggj
                 else
                     body->ApplyLinearImpulseToCenter({0.f, m_velocity.y < 0.f ? -50.f : 50.f}, true);
             }
+        }
+        else if(userDataB->getObjectType() == ObjectType::Projectile)
+        {
+            destroy();
+            Projectile *p = dynamic_cast<Projectile*>(b);
+            p->explode();
         }
     }
 

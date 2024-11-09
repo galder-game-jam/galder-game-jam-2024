@@ -133,8 +133,10 @@ namespace ggj
         UserData userData{ObjectType::Projectile, {0.f, 0.f}, "damage", "projectile"};
 
         bool isVisible = true;
-        return createObject<T>(m_animationManager, m_mapper, body, size, size, rect, tex, userData, velocity,
+        T* obj = createObject<T>(m_animationManager, m_mapper, body, size, size, rect, tex, userData, velocity,
             this, timeToLive, isVisible);
+        m_userDataManager.addUserData(body, obj);
+        return obj;
     }
 
     template <typename T, typename ... Args>

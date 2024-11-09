@@ -33,11 +33,7 @@ void ggj::Projectile::update(float timeDelta)
         
         if(m_timeAlive >= m_timeToLive)
         {
-            m_isImpactActive = true;
-            m_timeAlive = 0;
-            m_velocity.x = 0.f;
-            m_velocity.y = 0.f;
-            m_animation = m_impactAnimation;
+            explode();
         }
     }
     
@@ -45,5 +41,21 @@ void ggj::Projectile::update(float timeDelta)
 
 void ggj::Projectile::beginContact(PhysicsObject* a, PhysicsObject* b, b2Contact* contact)
 {
+    UserData* userDataB = b->getUserData();
+
+    if(userDataB->getObjectType() == ObjectType::Projectile)
+    {
+        destroy();
+    }
     PhysicsSprite::beginContact(a, b, contact);
+}
+
+void ggj::Projectile::explode()
+{
+    m_isImpactActive = true;
+    m_timeAlive = 0;
+    m_velocity.x = 0.f;
+    m_velocity.y = 0.f;
+    m_animation = m_impactAnimation;
+    m_body->SetAwake(false);
 }

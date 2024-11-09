@@ -43,6 +43,7 @@ namespace ggj
                 {
                     if(b->getUserData()->getObjectType() == ObjectType::Enemy)
                     {
+                        b->destroy();
                         b2Body *body = contact->GetFixtureB()->GetBody();
                         body->ApplyLinearImpulseToCenter({m_isLeftPos ? -50.f : 50.f, 0.f}, true);
                     }
