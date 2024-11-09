@@ -21,9 +21,9 @@ static const GuiStyleProp cyberStyleProps[CYBER_STYLE_PROPS_COUNT] = {
     { 0, 3, 0x82cde0ff },    // DEFAULT_BORDER_COLOR_FOCUSED 
     { 0, 4, 0x3299b4ff },    // DEFAULT_BASE_COLOR_FOCUSED 
     { 0, 5, 0xb6e1eaff },    // DEFAULT_TEXT_COLOR_FOCUSED 
-    { 0, 6, 0xeb7630ff },    // DEFAULT_BORDER_COLOR_PRESSED 
-    { 0, 7, 0xffbc51ff },    // DEFAULT_BASE_COLOR_PRESSED 
-    { 0, 8, 0xd86f36ff },    // DEFAULT_TEXT_COLOR_PRESSED 
+    { 0, 6, 0x09afdbff },    // DEFAULT_BORDER_COLOR_PRESSED - Grell - Mørkest
+    { 0, 7, 0x023542ff },    // DEFAULT_BASE_COLOR_PRESSED - Grell - TEXT BG
+    { 0, 8, 0x09afdbff },    // DEFAULT_TEXT_COLOR_PRESSED - Grell - TEXT
     { 0, 9, 0x134b5aff },    // DEFAULT_BORDER_COLOR_DISABLED 
     { 0, 10, 0x02313dff },    // DEFAULT_BASE_COLOR_DISABLED 
     { 0, 11, 0x17505fff },    // DEFAULT_TEXT_COLOR_DISABLED 

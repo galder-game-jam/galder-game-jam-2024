@@ -7,7 +7,7 @@
 
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.hpp"
-#include "style_cyber.h"
+#include "style_cyber_mod.h"
 
 namespace ggj
 {
@@ -30,23 +30,25 @@ namespace ggj
             {
                 if(isActive)
                 {
-                    GuiWindowFloating(&m_windowPosition, &m_windowSize, &m_minimized, &m_moving, &m_resizing, &DrawContent,
-                                      (Vector2) {140, 320}, &m_scroll, "Movable & Scalable Window");
+                    GuiWindowFloating(&m_windowPosition, &m_windowSize, &m_minimized, &m_moving, &m_resizing, &DrawServerCreate,
+                                      (Vector2) {140, 320}, &m_scroll, "Host server");
                 }
             }
             
             bool isActive = false;
         
         private:
-            Vector2 m_windowPosition = {10, 10 };
-            Vector2 m_windowSize = {200, 400 };
+            Vector2 m_windowPosition = {200, 200 };
+            Vector2 m_windowSize = {400, 400 };
             bool m_minimized = false;
             bool m_moving = false;
             bool m_resizing = false;
             Vector2 m_scroll;
             
+            std::string m_port{};
+            
             void GuiWindowFloating(Vector2 *position, Vector2 *size, bool *minimized, bool *moving, bool *resizing,
-                                   void (*draw_content)(Vector2, Vector2), Vector2 content_size, Vector2 *scroll,
+                                   void (*draw_content)(Vector2, Vector2, std::string&), Vector2 content_size, Vector2 *scroll,
                                    const char *title)
             {
                 #if !defined(RAYGUI_WINDOWBOX_STATUSBAR_HEIGHT)
@@ -160,7 +162,7 @@ namespace ggj
                             BeginScissorMode(scissor.x, scissor.y, scissor.width, scissor.height);
                         }
                         
-                        draw_content(*position, *scroll);
+                        draw_content(*position, *scroll, m_port);
                         
                         if(require_scissor)
                         {
@@ -171,6 +173,21 @@ namespace ggj
                     // draw the resize button/icon
                     GuiDrawIcon(71, position->x + size->x - 20, position->y + size->y - 20, 1, WHITE);
                 }
+            }
+            
+            static void DrawServerCreate(Vector2 position, Vector2 scroll, std::string &port)
+            {
+                GuiLabel((Rectangle) {position.x + 20 + scroll.x, position.y + 50 + scroll.y, 100, 25}, "Port: ");
+                GuiTextBox((Rectangle) {position.x + 120 + scroll.x, position.y + 50 + scroll.y, 100, 25}, port.data(), 6, true);
+                GuiButton((Rectangle) {position.x + 20 + scroll.x, position.y + 150 + scroll.y, 100, 25}, "Create");
+//                GuiButton((Rectangle) {position.x + 20 + scroll.x, position.y + 50 + scroll.y, 100, 25}, "Button 1");
+//                GuiButton((Rectangle) {position.x + 20 + scroll.x, position.y + 100 + scroll.y, 100, 25}, "Button 2");
+//                GuiButton((Rectangle) {position.x + 20 + scroll.x, position.y + 150 + scroll.y, 100, 25}, "Button 3");
+//                GuiLabel((Rectangle) {position.x + 20 + scroll.x, position.y + 200 + scroll.y, 250, 25}, "A Label");
+//                GuiLabel((Rectangle) {position.x + 20 + scroll.x, position.y + 250 + scroll.y, 250, 25},
+//                         "Another Label");
+//                GuiLabel((Rectangle) {position.x + 20 + scroll.x, position.y + 300 + scroll.y, 250, 25},
+//                         "Yet Another Label");
             }
             
             static void DrawContent(Vector2 position, Vector2 scroll)

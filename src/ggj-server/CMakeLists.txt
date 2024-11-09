@@ -13,7 +13,7 @@ elseif(WINDOWS)
     add_executable(ggj-server main.cpp ${CMAKE_SOURCE_DIR}/content/logo/icon.rc
             ServerApplication.hpp
             ServerWindow.hpp
-            style_cyber.h
+            style_cyber_mod.h
             ClientWindow.hpp)
     target_link_libraries(ggj-server galder-game-jam-library gamedev_base raylib_cpp raylib fmt box2d GameNetworkingSockets::shared)
     # target_link_options(ggj-server PRIVATE -mwindows)
