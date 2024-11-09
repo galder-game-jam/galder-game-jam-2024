@@ -39,7 +39,8 @@ namespace ggj
             bool hasClearedLevel() const;
             void setHasClearedLevel(bool hasClearedLevel);
             void beginContact(PhysicsObject *a, PhysicsObject *b, b2Contact *contact) override;
-            int getScore();
+            int getScore() const;
+            int getLives() const;
             void update(float timeDelta) override;
             void draw() override;
             Hitbox *getHitbox();

@@ -192,9 +192,14 @@ namespace ggj
         }
     }
 
-    int Player::getScore()
+    int Player::getScore() const
     {
         return m_score;
+    }
+
+    int Player::getLives() const
+    {
+        return m_lives;
     }
 
     bool Player::hasClearedLevel() const
