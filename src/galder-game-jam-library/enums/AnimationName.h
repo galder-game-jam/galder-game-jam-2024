@@ -35,6 +35,12 @@ namespace ggj
         RogueDeath = 26,
         RogueAttackSwing = 27,
         RogueAttackStab = 28,
+        MageBallFlightYellow = 29,
+        MageBallImpactYellow = 30,
+        MageBallFlightBlue = 31,
+        MageBallImpactBlue = 32,
+        MageBallFlightRed = 33,
+        MageBallImpactRed = 34,
     };
 
 } // ggj

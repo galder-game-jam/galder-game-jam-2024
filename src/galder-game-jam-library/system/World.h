@@ -42,7 +42,12 @@ namespace ggj
             void draw() override;
             std::string getLeadingPlayer();
 
+            template <typename T>
+            T * createProjectile(TextureName texture, raylib::Vector2 size, raylib::Vector2 pos, Vector2 velocity, float timeToLive);
+
         private:
+            template <typename T, typename... Args>
+            T * createObject(Args &&... args);
             //Generator logic
             void generatePhysicsObject(const std::string &name, b2Body* body, const ObjectGeneratorData &generatorData);
             void generatePlayer(const std::string &name, b2Body* body, const ObjectGeneratorData &generatorData);
@@ -88,6 +93,64 @@ namespace ggj
             std::map<int32_t, ggj::WorldLayer> m_layers;
 
     };
+
+    template <typename T>
+    T* World::createProjectile(TextureName texture, raylib::Vector2 size, raylib::Vector2 pos, Vector2 velocity, float timeToLive)
+    {
+        b2BodyType bodyType = b2_dynamicBody;
+        b2BodyDef bodyDef;
+        bodyDef.type = bodyType;
+        b2Vec2 b2size = PhysicsObject::ConvertToB2Vec2({(float) size.x, (float) size.y});
+        b2Vec2 b2origin = PhysicsObject::ConvertToB2Vec2({(float) size.x / 2, (float) size.y / 2});
+        b2Vec2 b2pos = PhysicsObject::ConvertToB2Vec2({(float) pos.x, (float) pos.y});
+
+        bodyDef.position.Set(b2pos.x + b2origin.x, b2pos.y + b2origin.y);
+        b2Body *body = m_world.CreateBody(&bodyDef);
+
+        b2CircleShape circle;
+        circle.m_p.Set(0.f, 0.f);
+        circle.m_radius = b2origin.x;
+
+        b2FixtureDef fd;
+        fd.shape = &circle;
+        fd.density = 1.0f; //Density must be something to react to gravity.
+        fd.friction = 1.0f;
+
+        body->CreateFixture(&fd);
+
+        for (b2Fixture *f = body->GetFixtureList(); f; f = f->GetNext())
+        {
+            f->SetSensor(true);
+        }
+
+        raylib::Rectangle rect = {0.f, 0.f, (float) size.x, (float) size.y};
+        raylib::Vector2 origin = {(float) rect.width / 2, (float) rect.height / 2};
+        raylib::Vector2 v = {(float) pos.x + origin.x, (float) pos.y + origin.y};
+        raylib::Rectangle r = {(float) rect.x, (float) rect.y, (float) rect.width, (float) rect.height};
+        raylib::Vector2 spriteSize = raylib::Vector2(r.width, r.height);
+
+        raylib::Texture *tex = m_textures.get(texture);
+        UserData userData{ObjectType::Projectile, {0.f, 0.f}, "damage", "projectile"};
+
+        bool isVisible = true;
+        T* obj = createObject<T>(m_animationManager, m_mapper, body, size, size, rect, tex, userData, velocity,
+            this, timeToLive, isVisible);
+        m_userDataManager.addUserData(body, obj);
+        return obj;
+    }
+
+    template <typename T, typename ... Args>
+    T* World::createObject(Args&&... args)
+    {
+        for (auto &layer: m_layers)
+        {
+            if(layer.second.getName() == "objects")
+            {
+                return layer.second.createGameObject<T>(args...);
+            }
+        }
+        return nullptr;
+    }
 }
 
 #endif //GAME_DEV_TEMPLATE_WORLD_H

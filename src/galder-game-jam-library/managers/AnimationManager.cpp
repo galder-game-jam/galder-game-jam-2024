@@ -252,64 +252,139 @@ namespace ggj
                 {
                     raylib::Vector2(64, 64),
                     {
-                                                {raylib::Vector2(64 * 0, 64 * 1), 100},
-                                                {raylib::Vector2(64 * 1, 64 * 1), 100},
-                                                {raylib::Vector2(64 * 2, 64 * 1), 100},
-                                                {raylib::Vector2(64 * 3, 64 * 1), 100},
-                                        }
+                                {raylib::Vector2(64 * 0, 64 * 1), 100},
+                                {raylib::Vector2(64 * 1, 64 * 1), 100},
+                                {raylib::Vector2(64 * 2, 64 * 1), 100},
+                                {raylib::Vector2(64 * 3, 64 * 1), 100},
+                        }
                 };
 
             m_animations[AnimationName::RogueRun] =
                 {
                     raylib::Vector2(64, 64),
                     {
-                                                {raylib::Vector2(64 * 0, 64 * 0), 100},
-                                                {raylib::Vector2(64 * 1, 64 * 0), 100},
-                                                {raylib::Vector2(64 * 2, 64 * 0), 100},
-                                                {raylib::Vector2(64 * 3, 64 * 0), 100},
-                                                {raylib::Vector2(64 * 4, 64 * 0), 100},
-                                                {raylib::Vector2(64 * 5, 64 * 0), 100},
-                                        }
+                                {raylib::Vector2(64 * 0, 64 * 0), 100},
+                                {raylib::Vector2(64 * 1, 64 * 0), 100},
+                                {raylib::Vector2(64 * 2, 64 * 0), 100},
+                                {raylib::Vector2(64 * 3, 64 * 0), 100},
+                                {raylib::Vector2(64 * 4, 64 * 0), 100},
+                                {raylib::Vector2(64 * 5, 64 * 0), 100},
+                        }
                 };
 
             m_animations[AnimationName::RogueDeath] =
                 {
                     raylib::Vector2(64, 64),
                     {
-                                                        {raylib::Vector2(64 * 0, 64 * 2), 100},
-                                                        {raylib::Vector2(64 * 1, 64 * 2), 100},
-                                                        {raylib::Vector2(64 * 2, 64 * 2), 100},
-                                                        {raylib::Vector2(64 * 3, 64 * 2), 100},
-                                                        {raylib::Vector2(64 * 4, 64 * 2), 100},
-                                                        {raylib::Vector2(64 * 5, 64 * 2), 100000},
-                                                }
+                                {raylib::Vector2(64 * 0, 64 * 2), 100},
+                                {raylib::Vector2(64 * 1, 64 * 2), 100},
+                                {raylib::Vector2(64 * 2, 64 * 2), 100},
+                                {raylib::Vector2(64 * 3, 64 * 2), 100},
+                                {raylib::Vector2(64 * 4, 64 * 2), 100},
+                                {raylib::Vector2(64 * 5, 64 * 2), 100000},
+                        }
                 };
 
             m_animations[AnimationName::RogueAttackStab] =
                 {
                     raylib::Vector2(64, 64),
                     {
-                                                                {raylib::Vector2(64 * 0, 64 * 4), 100},
-                                                                {raylib::Vector2(64 * 1, 64 * 4), 200},
-                                                                {raylib::Vector2(64 * 2, 64 * 4), 300},
-                                                                {raylib::Vector2(64 * 3, 64 * 4), 200},
-                                                                {raylib::Vector2(64 * 4, 64 * 4), 100},
-                                                                {raylib::Vector2(64 * 5, 64 * 4), 100},
-                                                        }
+                                {raylib::Vector2(64 * 0, 64 * 4), 100},
+                                {raylib::Vector2(64 * 1, 64 * 4), 200},
+                                {raylib::Vector2(64 * 2, 64 * 4), 300},
+                                {raylib::Vector2(64 * 3, 64 * 4), 200},
+                                {raylib::Vector2(64 * 4, 64 * 4), 100},
+                                {raylib::Vector2(64 * 5, 64 * 4), 100},
+                        }
                 };
 
             m_animations[AnimationName::RogueAttackSwing] =
                 {
                     raylib::Vector2(64, 64),
                     {
-                                                                {raylib::Vector2(64 * 0, 64 * 3), 100},
-                                                                {raylib::Vector2(64 * 1, 64 * 3), 40},
-                                                                {raylib::Vector2(64 * 2, 64 * 3), 40},
-                                                                {raylib::Vector2(64 * 3, 64 * 3), 40},
-                                                                {raylib::Vector2(64 * 4, 64 * 3), 40},
-                                                                {raylib::Vector2(64 * 5, 64 * 3), 40},
-                                                                {raylib::Vector2(64 * 6, 64 * 3), 100},
-                                                        }
+                                {raylib::Vector2(64 * 0, 64 * 3), 100},
+                                {raylib::Vector2(64 * 1, 64 * 3), 40},
+                                {raylib::Vector2(64 * 2, 64 * 3), 40},
+                                {raylib::Vector2(64 * 3, 64 * 3), 40},
+                                {raylib::Vector2(64 * 4, 64 * 3), 40},
+                                {raylib::Vector2(64 * 5, 64 * 3), 40},
+                                {raylib::Vector2(64 * 6, 64 * 3), 100},
+                        }
+                };
+
+            m_animations[AnimationName::MageBallFlightYellow] =
+                {
+                    raylib::Vector2(16, 16),
+                    {
+                                {raylib::Vector2(16 * 0, 16 * 0), 50},
+                                {raylib::Vector2(16 * 1, 16 * 0), 50},
+                        }
+                };
+
+            m_animations[AnimationName::MageBallImpactYellow] =
+                {
+                    raylib::Vector2(16, 16),
+                    {
+                                {raylib::Vector2(16 * 0, 16 * 1), 50},
+                                {raylib::Vector2(16 * 1, 16 * 1), 50},
+                                {raylib::Vector2(16 * 2, 16 * 1), 50},
+                                {raylib::Vector2(16 * 3, 16 * 1), 50},
+                                {raylib::Vector2(16 * 4, 16 * 1), 50},
+                                {raylib::Vector2(16 * 5, 16 * 1), 50},
+                                {raylib::Vector2(16 * 6, 16 * 1), 50},
+                                {raylib::Vector2(16 * 7, 16 * 1), 50},
+                                {raylib::Vector2(16 * 8, 16 * 1), 50},
+                        }
+                };
+
+            m_animations[AnimationName::MageBallFlightBlue] =
+                {
+                    raylib::Vector2(16, 16),
+                    {
+                                {raylib::Vector2(16 * 0, 16 * 2), 50},
+                                {raylib::Vector2(16 * 1, 16 * 2), 50},
+                        }
+                };
+
+            m_animations[AnimationName::MageBallImpactBlue] =
+                {
+                    raylib::Vector2(16, 16),
+                    {
+                                {raylib::Vector2(16 * 0, 16 * 3), 50},
+                                {raylib::Vector2(16 * 1, 16 * 3), 50},
+                                {raylib::Vector2(16 * 2, 16 * 3), 50},
+                                {raylib::Vector2(16 * 3, 16 * 3), 50},
+                                {raylib::Vector2(16 * 4, 16 * 3), 50},
+                                {raylib::Vector2(16 * 5, 16 * 3), 50},
+                                {raylib::Vector2(16 * 6, 16 * 3), 50},
+                                {raylib::Vector2(16 * 7, 16 * 3), 50},
+                                {raylib::Vector2(16 * 8, 16 * 3), 50},
+                        }
+                };
+
+            m_animations[AnimationName::MageBallFlightRed] =
+                {
+                    raylib::Vector2(16, 16),
+                    {
+                                {raylib::Vector2(16 * 0, 16 * 4), 50},
+                                {raylib::Vector2(16 * 1, 16 * 4), 50},
+                        }
+                };
+
+            m_animations[AnimationName::MageBallImpactRed] =
+                {
+                    raylib::Vector2(16, 16),
+                    {
+                                {raylib::Vector2(16 * 0, 16 * 5), 50},
+                                {raylib::Vector2(16 * 1, 16 * 5), 50},
+                                {raylib::Vector2(16 * 2, 16 * 5), 50},
+                                {raylib::Vector2(16 * 3, 16 * 5), 50},
+                                {raylib::Vector2(16 * 4, 16 * 5), 50},
+                                {raylib::Vector2(16 * 5, 16 * 5), 50},
+                                {raylib::Vector2(16 * 6, 16 * 5), 50},
+                                {raylib::Vector2(16 * 7, 16 * 5), 50},
+                                {raylib::Vector2(16 * 8, 16 * 5), 50},
+                        }
                 };
         return true;
     }
