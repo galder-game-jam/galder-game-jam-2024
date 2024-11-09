@@ -41,6 +41,8 @@ namespace ggj
             void update(float timeDelta) override;
             void draw() override;
             std::string getLeadingPlayer();
+            [[nodiscard]] int getEnemies() const;
+            void reduceEnemyKillCountByOne();
 
             template <typename T>
             T * createProjectile(TextureName texture, raylib::Vector2 size, raylib::Vector2 pos, Vector2 velocity, float timeToLive);
@@ -92,6 +94,7 @@ namespace ggj
             raylib::Color m_backgroundColor = raylib::Color::White();
             std::map<int32_t, ggj::WorldLayer> m_layers;
 
+            int m_numberOfEnemies{0};
     };
 
     template <typename T>
