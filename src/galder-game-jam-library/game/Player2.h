@@ -35,7 +35,6 @@ namespace ggj
                 setPlayerState(PlayerState::Idle);
             }
 
-            [[nodiscard]] const Vector2 &getVelocity() const;
             [[nodiscard]] bool cameraShouldFollowPlayer() const;
             bool hasClearedLevel() const;
             void setHasClearedLevel(bool hasClearedLevel);
@@ -51,7 +50,6 @@ namespace ggj
 
             ggj::IInputManager<ggj::KeyboardKey> &m_inputManager;
             ggj::IAnimationManager<ggj::Animation, ggj::AnimationName> &m_animationManager;
-            raylib::Vector2 m_velocity {0.f, 0.f};
             bool m_cameraShouldFollowPlayer {true};
             Animation m_animation;
             IMapper &m_mapper;
@@ -67,9 +65,8 @@ namespace ggj
             uint16_t m_attackFrames {20}; //How many frames an attack takes
             uint16_t m_attackCounter {0}; //Counts attack duration
             
-            int m_maxJumps{2};
-            int m_jumps{0};
-            int m_score{0};
+            int m_score{};
+            int m_lives{3};
     };
 
 } // dev
