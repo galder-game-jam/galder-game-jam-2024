@@ -311,6 +311,31 @@ namespace ggj
                                                                 {raylib::Vector2(64 * 6, 64 * 3), 100},
                                                         }
                 };
+
+            m_animations[AnimationName::MageBallFlight] =
+                {
+                    raylib::Vector2(16, 16),
+                    {
+                                                                                {raylib::Vector2(64 * 0, 64 * 0), 50},
+                                                                                {raylib::Vector2(64 * 1, 64 * 0), 50},
+                                                                        }
+                };
+
+            m_animations[AnimationName::MageBallImpact] =
+                {
+                    raylib::Vector2(16, 16),
+                    {
+                                                                                {raylib::Vector2(64 * 0, 64 * 1), 50},
+                                                                                {raylib::Vector2(64 * 1, 64 * 1), 50},
+                                                                                {raylib::Vector2(64 * 2, 64 * 1), 50},
+                                                                                {raylib::Vector2(64 * 3, 64 * 1), 50},
+                                                                                {raylib::Vector2(64 * 4, 64 * 1), 50},
+                                                                                {raylib::Vector2(64 * 5, 64 * 1), 50},
+                                                                                {raylib::Vector2(64 * 6, 64 * 1), 50},
+                                                                                {raylib::Vector2(64 * 7, 64 * 1), 50},
+                                                                                {raylib::Vector2(64 * 8, 64 * 1), 50},
+                                                                        }
+                };
         return true;
     }
 } // ggj
