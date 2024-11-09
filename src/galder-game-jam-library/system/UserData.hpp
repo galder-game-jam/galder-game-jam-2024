@@ -29,6 +29,8 @@ namespace ggj
             [[nodiscard]] const std::string &getCommand() const { return m_command; }
             [[nodiscard]] const std::string &getName() const { return m_name; }
 
+            int enemiesKilled {0};
+
         private:
             ObjectType m_objectType {ObjectType::Undefined};
             raylib::Vector2 m_force {0.f, 0.f};

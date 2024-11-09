@@ -26,6 +26,8 @@ namespace ggj
             void update(float timeDelta) override;
             void beginContact(PhysicsObject *a, PhysicsObject *b, b2Contact *contact) override;
             void explode();
+            void setOwner(PhysicsObject* owner);
+            PhysicsObject* getOwner();
     
         protected:
             World *m_world{nullptr};
@@ -33,6 +35,7 @@ namespace ggj
             float m_timeToLive {};
             float m_timeAlive {};
             bool m_isImpactActive{};
+            PhysicsObject* m_owner {nullptr};
     
             IAnimationManager<Animation, AnimationName> &m_animationManager;
             IMapper &m_mapper;

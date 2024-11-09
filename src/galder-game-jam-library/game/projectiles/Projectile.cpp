@@ -59,3 +59,13 @@ void ggj::Projectile::explode()
     m_animation = m_impactAnimation;
     m_body->SetAwake(false);
 }
+
+void ggj::Projectile::setOwner(PhysicsObject* owner)
+{
+    m_owner = owner;
+}
+
+ggj::PhysicsObject* ggj::Projectile::getOwner()
+{
+    return m_owner;
+}

@@ -41,7 +41,8 @@ namespace ggj
             void update(float timeDelta) override;
             void draw() override;
             std::string getLeadingPlayer();
-            int getEnemies();
+            [[nodiscard]] int getEnemies() const;
+            void reduceEnemyKillCountByOne();
 
             template <typename T>
             T * createProjectile(TextureName texture, raylib::Vector2 size, raylib::Vector2 pos, Vector2 velocity, float timeToLive);

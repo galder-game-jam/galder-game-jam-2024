@@ -225,7 +225,6 @@ namespace ggj
     {
         const raylib::Vector2 velocity{m_isLeftPosition? -8.f: 8.f,0.f};
         MageBall *ball = m_world->createProjectile<ggj::MageBall>(TextureName::MageBall, raylib::Vector2 {16.f,16.f}, raylib::Vector2{m_position.x, m_position.y - 8}, velocity, 1.f);
-
-
+        ball->setOwner(this);
     }
 } // dev

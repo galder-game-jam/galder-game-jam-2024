@@ -49,6 +49,7 @@ namespace ggj
             destroy();
             Projectile *p = dynamic_cast<Projectile*>(b);
             p->explode();
+            p->getOwner()->getUserData()->enemiesKilled++;
         }
     }
 

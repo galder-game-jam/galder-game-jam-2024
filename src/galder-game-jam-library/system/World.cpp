@@ -239,11 +239,14 @@ namespace ggj
             m_debugManager.setText(3, fmt::format("CameraPos: ({0}, {1})", (int) m_camera.target.x, (int) m_camera.target.y), color);
             m_debugManager.setText(4, fmt::format("Player1 score: {0}", m_player->getScore()), color);
             m_debugManager.setText(5, fmt::format("Player1 lives: {0}", m_player->getLives()), color);
-            m_debugManager.setText(6, fmt::format("Player2 score: {0}", m_player2->getScore()), color);
-            m_debugManager.setText(7, fmt::format("Player2 lives: {0}", m_player2->getLives()), color);
-            m_debugManager.setText(8, fmt::format("Current leader: {0}", getLeadingPlayer()), color);
-            m_debugManager.setText(9, fmt::format("Portal timer: {0}", (int) m_portal->getTimeUntilPortalOpens()), color);
-            m_debugManager.setText(10, fmt::format("Total Enemies: {0}", (int) m_numberOfEnemies), color);
+            m_debugManager.setText(6, fmt::format("Player1 kills: {0}", (int) m_player->getUserData()->enemiesKilled), color);
+            m_debugManager.setText(7, fmt::format("Player2 score: {0}", m_player2->getScore()), color);
+            m_debugManager.setText(8, fmt::format("Player2 lives: {0}", m_player2->getLives()), color);
+            m_debugManager.setText(9, fmt::format("Player2 kills: {0}", (int) m_player2->getUserData()->enemiesKilled), color);
+            m_debugManager.setText(10, fmt::format("Current leader: {0}", getLeadingPlayer()), color);
+            m_debugManager.setText(11, fmt::format("Portal timer: {0}", (int) m_portal->getTimeUntilPortalOpens()), color);
+            int enemiesLeft = m_numberOfEnemies - (m_player->getUserData()->enemiesKilled + m_player2->getUserData()->enemiesKilled);
+            m_debugManager.setText(12, fmt::format("Enemies: {0} ({1} remaining)", (int) m_numberOfEnemies, enemiesLeft), color);
         }
 
         if (m_camera.target.x > m_cameraMax.x)
@@ -719,8 +722,13 @@ namespace ggj
             return "both";
     }
 
-    int World::getEnemies()
+    int World::getEnemies() const
     {
         return m_numberOfEnemies;
+    }
+
+    void World::reduceEnemyKillCountByOne()
+    {
+        --m_numberOfEnemies;
     }
 }
