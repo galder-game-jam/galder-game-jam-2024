@@ -82,6 +82,7 @@ namespace ggj
                 m_strToTex["complete-top-down_32x32.png"] = TextureName::TopDownForest;
                 m_strToTex["Rogue.png"] = TextureName::RoguePlayer;
                 m_strToTex["Wizard.png"] = TextureName::WizardPlayer;
+                m_strToTex["MageBall.png"] = TextureName::MageBall;
 
                 m_texToRes[TextureName::Player] = ResourceName::GraphicsPlayer;
                 m_texToRes[TextureName::MagicCliffsTileset] = ResourceName::GraphicsMagicCliffsTileset;
@@ -149,6 +150,7 @@ namespace ggj
                 m_texToRes[TextureName::TopDownForest] = ResourceName::TopDownForest;
                 m_texToRes[TextureName::RoguePlayer] = ResourceName::RoguePlayer;
                 m_texToRes[TextureName::WizardPlayer] = ResourceName::WizardPlayer;
+                m_texToRes[TextureName::MageBall] = ResourceName::MageBall;
             };
 
             TextureName getTextureNameByString(const std::string &id) override

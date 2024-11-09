@@ -89,7 +89,8 @@ namespace ggj
 
         TopDownForest = 200,
         RoguePlayer = 201,
-        WizardPlayer = 202
+        WizardPlayer = 202,
+        MageBall = 203,
     };
 }
 
