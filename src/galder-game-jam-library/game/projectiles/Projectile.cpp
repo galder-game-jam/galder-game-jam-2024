@@ -6,11 +6,10 @@
 
 void ggj::Projectile::update(float timeDelta)
 {
-    m_animation = m_animation;
     PhysicsSprite::update(timeDelta);
     m_timeAlive += timeDelta;
     
-    
+
     if(m_animation.isValid())
     {
         m_animation.update(timeDelta);
