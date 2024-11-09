@@ -62,6 +62,10 @@ namespace ggj
             raylib::Vector2 m_origin {};
             raylib::Color m_color {};
             UserData m_userData {};
+            raylib::Vector2 m_velocity {};
+
+        public:
+            [[nodiscard]] raylib::Vector2 getVelocity() const;
     };
 
 } // dev
