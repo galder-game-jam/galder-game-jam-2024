@@ -26,6 +26,24 @@ namespace ggj
         {
             turn();
         }
+        if(userDataB->getObjectType() == ObjectType::Player)
+        {
+
+            b2Body *body = b->getBody();
+            auto playerVelocity = b->getVelocity();
+
+            if(m_velocity.x < 0.f && playerVelocity.x < 0.f)
+            {
+                body->ApplyLinearImpulseToCenter({50.f, 0.f}, true);
+            }
+            else if(m_velocity.x > 0.f && playerVelocity.x > 0.f)
+            {
+                body->ApplyLinearImpulseToCenter({-50.f, 0.f}, true);
+            }
+            else
+                body->ApplyLinearImpulseToCenter({m_velocity.GetX() < 0.f ? -50.f : 50.f, -2.f}, true);
+
+        }
     }
 
     void Spider::turn()
