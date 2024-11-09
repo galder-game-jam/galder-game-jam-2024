@@ -234,19 +234,17 @@ namespace ggj
                               : m_cameraDefault;
 
             Colori color = {0, 50, 150, 255};
-            m_debugManager.setText(1, fmt::format("Player1Pos: ({0}, {1})", (int) m_player->getPosition().x, (int) m_player->getPosition().y), color);
-            m_debugManager.setText(2, fmt::format("Player2Pos: ({0}, {1})", (int) m_player2->getPosition().x, (int) m_player2->getPosition().y), color);
-            m_debugManager.setText(3, fmt::format("CameraPos: ({0}, {1})", (int) m_camera.target.x, (int) m_camera.target.y), color);
-            m_debugManager.setText(4, fmt::format("Player1 score: {0}", m_player->getScore()), color);
-            m_debugManager.setText(5, fmt::format("Player1 lives: {0}", m_player->getLives()), color);
-            m_debugManager.setText(6, fmt::format("Player1 kills: {0}", (int) m_player->getUserData()->enemiesKilled), color);
-            m_debugManager.setText(7, fmt::format("Player2 score: {0}", m_player2->getScore()), color);
-            m_debugManager.setText(8, fmt::format("Player2 lives: {0}", m_player2->getLives()), color);
-            m_debugManager.setText(9, fmt::format("Player2 kills: {0}", (int) m_player2->getUserData()->enemiesKilled), color);
-            m_debugManager.setText(10, fmt::format("Current leader: {0}", getLeadingPlayer()), color);
-            m_debugManager.setText(11, fmt::format("Portal timer: {0}", (int) m_portal->getTimeUntilPortalOpens()), color);
+
+            m_debugManager.setText(1, fmt::format("Player1 | coins: {0} | lives: {1} | kills: {2} | position: ({3},{4})", m_player->getScore(), m_player->getLives(), m_player->getUserData()->enemiesKilled, (int) m_player->getPosition().x, (int) m_player->getPosition().y), color);
+            m_debugManager.setText(2, fmt::format("Player2 | coins: {0} | lives: {1} | kills: {2} | position: ({3},{4})", m_player2->getScore(), m_player2->getLives(), m_player2->getUserData()->enemiesKilled, (int) m_player2->getPosition().x, (int) m_player2->getPosition().y), color);
             int enemiesLeft = m_numberOfEnemies - (m_player->getUserData()->enemiesKilled + m_player2->getUserData()->enemiesKilled);
-            m_debugManager.setText(12, fmt::format("Enemies: {0} ({1} remaining)", (int) m_numberOfEnemies, enemiesLeft), color);
+            m_debugManager.setText(3, fmt::format("Enemies: {0} ({1} remaining)", (int) m_numberOfEnemies, enemiesLeft), color);
+            m_debugManager.setText(4, fmt::format("Portal timer: {0}", (int) m_portal->getTimeUntilPortalOpens()), color);
+#ifdef GAME_DEV_DEBUG
+            m_debugManager.setText(5, fmt::format("Current leader: {0}", getLeadingPlayer()), color);
+            m_debugManager.setText(6, fmt::format("CameraPos: ({0}, {1})", (int) m_camera.target.x, (int) m_camera.target.y), color);
+#endif
+
         }
 
         if (m_camera.target.x > m_cameraMax.x)
