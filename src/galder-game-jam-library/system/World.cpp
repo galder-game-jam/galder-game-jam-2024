@@ -42,7 +42,7 @@ namespace ggj
             if (layer.getType() == tson::LayerType::TileLayer)
             {
                 if (m_layers.count(layerIndex) == 0)
-                    m_layers[layerIndex] = {layerIndex, true}; //Tiles are only for drawing and will not be updated
+                    m_layers[layerIndex] = {layerIndex, true, layer.getName()}; //Tiles are only for drawing and will not be updated
 
                 for (auto &tileObject: layer.getTileObjects())
                 {
@@ -66,7 +66,7 @@ namespace ggj
             else if (layer.getType() == tson::LayerType::ObjectGroup)
             {
                 if (m_layers.count(layerIndex) == 0)
-                    m_layers[layerIndex] = {layerIndex, false}; //Objects will have their positions updated!
+                    m_layers[layerIndex] = {layerIndex, false, layer.getName()}; //Objects will have their positions updated!
 
                 for (auto &obj: layer.getObjects())
                 {
@@ -352,7 +352,7 @@ namespace ggj
 
                 raylib::Vector2 spriteSize = raylib::Vector2(r.width, r.height);
 
-                m_player2 = m_layers[generatorData.layerIndex].createGameObject<ggj::Player2>(m_input, m_animationManager, m_mapper, body,
+                m_player2 = m_layers[generatorData.layerIndex].createGameObject<ggj::Player2>(this, m_input, m_animationManager, m_mapper, body,
                                                                                             raylib::Vector2((float) generatorData.size.x,
                                                                                                             (float) generatorData.size.y),
                                                                                             spriteSize, r,

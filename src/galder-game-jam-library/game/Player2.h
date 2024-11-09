@@ -12,18 +12,22 @@
 #include "../interfaces/system/IMapper.h"
 
 #include "Hitbox.hpp"
+#include "projectiles/Projectile.h"
 
 namespace ggj
 {
+    class World;
+
     class Player2 : public PhysicsSprite
     {
         public:
             Player2() = default;
-            Player2(ggj::IInputManager<ggj::KeyboardKey> &inputManager, ggj::IAnimationManager<ggj::Animation, ggj::AnimationName> &animationManager, IMapper &mapper, b2Body *body, const raylib::Vector2 &physicsSize,
+            Player2(ggj::World* world, ggj::IInputManager<ggj::KeyboardKey> &inputManager, ggj::IAnimationManager<ggj::Animation, ggj::AnimationName> &animationManager, IMapper &mapper, b2Body *body, const raylib::Vector2 &physicsSize,
                    const raylib::Vector2 &spriteSize,
                    const raylib::Rectangle &drawingRect, raylib::Texture * texture, const UserData &userData, bool isVisible = true)
             : PhysicsSprite(body, physicsSize, spriteSize, drawingRect, texture, userData, isVisible), m_inputManager {inputManager}, m_animationManager {animationManager}, m_mapper{mapper}
             {
+                m_world = world;
                 m_body->SetFixedRotation(true);
                 m_animation = m_animationManager.getAnimation(AnimationName::PlayerIdleNG);
                 m_startPos = ConvertToVector2(m_body->GetPosition());
@@ -45,9 +49,11 @@ namespace ggj
             Hitbox *getHitbox();
         
         private:
+            void shootMageBall();
             void handleInputs(float timeDelta);
             void setPlayerState(PlayerState playerState);
 
+            ggj::World* m_world {nullptr};
             ggj::IInputManager<ggj::KeyboardKey> &m_inputManager;
             ggj::IAnimationManager<ggj::Animation, ggj::AnimationName> &m_animationManager;
             bool m_cameraShouldFollowPlayer {true};
@@ -67,6 +73,7 @@ namespace ggj
             
             int m_score{};
             int m_lives{3};
+            std::vector<std::unique_ptr<Projectile>> m_projectiles {};
     };
 
 } // dev

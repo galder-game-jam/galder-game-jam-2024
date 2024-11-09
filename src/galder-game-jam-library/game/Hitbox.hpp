@@ -41,8 +41,11 @@ namespace ggj
             {
                 if(m_isActive && b != m_owner)
                 {
-                    b2Body *body = contact->GetFixtureB()->GetBody();
-                    body->ApplyLinearImpulseToCenter({m_isLeftPos ? -50.f : 50.f, 0.f}, true);
+                    if(b->getUserData()->getObjectType() == ObjectType::Enemy)
+                    {
+                        b2Body *body = contact->GetFixtureB()->GetBody();
+                        body->ApplyLinearImpulseToCenter({m_isLeftPos ? -50.f : 50.f, 0.f}, true);
+                    }
                 }
             }
             
