@@ -28,10 +28,9 @@ namespace ggj
                 m_animation = m_animationManager.getAnimation(AnimationName::PlayerIdleNG);
                 m_startPos = ConvertToVector2(m_body->GetPosition());
                 
-                //Create hitbox
-                raylib::Vector2 hitboxPos = PhysicsObject::ConvertToVector2(m_body->GetPosition());
-                hitboxPos = raylib::Vector2(hitboxPos.GetX() + 16, hitboxPos.y);
-                m_hitbox.create(this, m_body->GetWorld(), hitboxPos, {16, 16});
+                const raylib::Vector2 bodyPosition = ConvertToVector2(m_body->GetPosition());
+                auto hitBoxPos = raylib::Vector2(bodyPosition.x + 16, bodyPosition.y);
+                m_hitbox.create(this, m_body->GetWorld(), hitBoxPos, {32, 16});
                 setPlayerState(PlayerState::Idle);
             }
 

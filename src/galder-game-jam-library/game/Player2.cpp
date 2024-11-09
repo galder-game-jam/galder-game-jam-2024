@@ -148,9 +148,9 @@ namespace ggj
         
         m_hitbox.setIsActive(m_isAttacking);
         if(m_isLeftPosition)
-            m_hitbox.getBody()->SetTransform(PhysicsObject::ConvertToB2Vec2({m_position.x-12, m_position.y-8}), 0);
+            m_hitbox.getBody()->SetTransform(PhysicsObject::ConvertToB2Vec2({m_position.x-12, m_position.y}), 0);
         else
-            m_hitbox.getBody()->SetTransform(PhysicsObject::ConvertToB2Vec2({m_position.x+12, m_position.y-8}), 0);
+            m_hitbox.getBody()->SetTransform(PhysicsObject::ConvertToB2Vec2({m_position.x+12, m_position.y}), 0);
     }
 
     bool Player2::cameraShouldFollowPlayer() const
