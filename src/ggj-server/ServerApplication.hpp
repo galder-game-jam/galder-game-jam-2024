@@ -7,6 +7,10 @@
 
 #include "../galder-game-jam-library/GalderGameJamLibrary.h"
 
+#include "ServerWindow.hpp"
+#include "ClientWindow.hpp"
+//#include "raygui-cpp/include/raygui-cpp.h"
+
 namespace ggj
 {
     class IServerApplication
@@ -17,14 +21,16 @@ namespace ggj
             
             virtual void update(float timeDelta) = 0;
             virtual void draw() = 0;
+            
+            virtual void cleanup() = 0;
     };
     
     class ServerApplication : public IServerApplication
     {
         public:
             ServerApplication(raylib::Window &window, ILogger &logger, IInputManager<ggj::KeyboardKey> &input, IDebugManager &debugManager,
-                              ggj::IIpAddressResolver &ipResolver) :
-            m_window {window}, m_logger {logger}, m_input {input}, m_debugManager {debugManager}, m_ipResolver {ipResolver}
+                              ggj::IIpAddressResolver &ipResolver, ggj::IExecutableInfo &executable) :
+            m_window {window}, m_logger {logger}, m_input {input}, m_debugManager {debugManager}, m_ipResolver {ipResolver}, m_executable {executable}
             {
             
             }
@@ -36,6 +42,23 @@ namespace ggj
                 m_logger.information(m_localIp);
                 m_logger.information(m_publicIp);
                 
+                //Gui settings
+                GuiLoadStyleCyber();
+                auto path = m_executable.getContentRootDirectory();
+                
+                //Font
+                std::string fullPath = fmt::format("{0}/DejaVuSansBold.ttf", path.c_str());
+                GetFontDefault();
+                m_font = LoadFontEx(fullPath.c_str(), 24, nullptr, 0);  // 32 is the font size
+                GuiGetFont();
+                GuiSetFont(m_font);
+                GuiSetStyle(DEFAULT, TEXT_SIZE, 24);
+                //m_debugManager.setFont(&m_font);
+                
+                //Gui tools
+                m_clientTool.initialize();
+                m_serverTool.initialize();
+                
                 return true;
             }
             
@@ -45,6 +68,13 @@ namespace ggj
                 m_debugManager.clearText();
                 m_debugManager.setText(0, m_localIp);
                 m_debugManager.setText(1, m_publicIp);
+                m_debugManager.setText(2, m_clickedText);
+                
+                m_clientTool.update(timeDelta);
+                m_serverTool.update(timeDelta);
+                
+//                m_textBox.Update();
+//                m_popup.Update();
             }
             
             void draw() override
@@ -54,6 +84,11 @@ namespace ggj
                 m_renderTexture.EndMode();
                 
                 render();
+            }
+            
+            void cleanup() override
+            {
+                UnloadFont(m_font);
             }
         
         private:
@@ -65,8 +100,28 @@ namespace ggj
                 DrawTexturePro(m_renderTexture.texture, raylib::Rectangle( 0.0f, 0.0f, (float)m_renderTexture.texture.width, (float)-m_renderTexture.texture.height ),
                                raylib::Rectangle( ((float)m_window.GetWidth() - ((float)m_originalWindowSize.x*scale))*0.5f, ((float)m_window.GetHeight() - ((float)m_originalWindowSize.y*scale))*0.5f,
                                                   (float)m_originalWindowSize.x*scale, (float)m_originalWindowSize.y*scale ), { 0, 0 }, 0.0f, WHITE);
+                
+                renderGui();
+                m_clientTool.draw();
+                m_serverTool.draw();
                 m_debugManager.draw();
                 EndDrawing();
+            }
+            
+            void renderGui()
+            {
+                if(GuiButton((Rectangle) { 300, 0, 200, 50 }, "Server Mode"))
+                {
+                    m_clickedText = "Server";
+                    m_clientTool.isActive = false;
+                    m_serverTool.isActive = true;
+                }
+                if(GuiButton((Rectangle) { 500, 0, 200, 50 }, "Client Mode"))
+                {
+                    m_clickedText = "Client";
+                    m_clientTool.isActive = true;
+                    m_serverTool.isActive = false;
+                }
             }
             
             std::vector<std::unique_ptr<ggj::IServer<ggj::ServerNetworkData, ggj::PlayerNetworkData>>> m_servers;
@@ -77,14 +132,25 @@ namespace ggj
             IInputManager<ggj::KeyboardKey> &m_input;
             IDebugManager &m_debugManager;
             ggj::IIpAddressResolver &m_ipResolver;
+            ggj::IExecutableInfo &m_executable;
             raylib::Color m_backgroundColor = raylib::Color(8, 140, 197);
+            Font m_font{};
             float m_lastTimeDelta {};
             
             raylib::Vector2 m_originalWindowSize;
             raylib::RenderTexture2D m_renderTexture;
             
+            ggj::ServerWindow m_serverTool{};
+            ggj::ClientWindow m_clientTool{};
+            
             std::string m_localIp = "";
             std::string m_publicIp = "";
+            std::string m_clickedText = "Temp";
+            
+            //Gui
+//            rgc::WindowBox m_popup{};
+//            rgc::Button m_testBtn {};
+//            rgc::TextInputBox m_textBox {};
     };
 }
 

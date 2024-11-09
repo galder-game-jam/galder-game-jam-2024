@@ -1,7 +1,7 @@
 #include "../galder-game-jam-library/GalderGameJamLibrary.h"
 #include "di.hpp"
 #include "fmt/color.h"
-#include "raylib-cpp.hpp"
+//#include "raylib-cpp.hpp"
 #include <stdio.h>
 #include "ServerApplication.hpp"
 
@@ -38,9 +38,9 @@ struct App
 
 int testNetworking()
 {
-    int screenWidth = 800; // HalfWidth: 400
-    int screenHeight = 600; // HalfHeight: 300
-    raylib::Window window {screenWidth, screenHeight, "Raylib Template"};
+    int screenWidth = 1440;
+    int screenHeight = 900; // HalfHeight: 450
+    raylib::Window window {screenWidth, screenHeight, "GGJ Server/Client App"};
     window.SetState(FLAG_WINDOW_RESIZABLE);
     
     ggj::ConsoleLogger l = ggj::ConsoleLogger(ggj::LogLevel::Debug);
@@ -64,6 +64,7 @@ int testNetworking()
         timer.restart();
         app.server.draw();
     }
+    app.server.cleanup();
 //    std::string localIp = fmt::format("Local IP: {0}", app.ipResolver.getLocalIpAddress());
 //    std::string publicIp = fmt::format("Public IP: {0}", app.ipResolver.getPublicIpAddress());
 //    logger.information(localIp);

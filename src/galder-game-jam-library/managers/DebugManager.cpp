@@ -31,7 +31,13 @@ namespace ggj
             ggj::Colori c = debugText.second.second;
             raylib::Color color = {c.r, c.g, c.b, c.a};
 
-            DrawText(text.c_str(), (int)textPos.x, (int)textPos.y, m_fontSize, color);
+            if(m_font != nullptr)
+            {
+                DrawTextEx(*m_font, text.c_str(), (int)textPos.x, (int)textPos.y, m_fontSize, color);
+            }
+            else
+                DrawText(text.c_str(), (int)textPos.x, (int)textPos.y, m_fontSize, color);
+            
             textPos = raylib::Vector2(textPos.x, textPos.y + (float)m_fontSize + 4.f);
         }
     }
@@ -39,5 +45,10 @@ namespace ggj
     void DebugManager::clearText()
     {
         m_debugTexts.clear();
+    }
+    
+    void DebugManager::setFont(Font *font)
+    {
+        m_font = font;
     }
 } // dev
