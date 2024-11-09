@@ -30,7 +30,7 @@ namespace ggj
                 
                 const raylib::Vector2 bodyPosition = ConvertToVector2(m_body->GetPosition());
                 auto hitBoxPos = raylib::Vector2(bodyPosition.x + 16, bodyPosition.y);
-                m_hitbox.create(this, m_body->GetWorld(), hitBoxPos, {32, 16});
+                m_hitbox.create(this, m_body->GetWorld(), hitBoxPos, {32, 32});
                 setPlayerState(PlayerState::Idle);
             }
 
