@@ -8,6 +8,7 @@
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.hpp"
 #include "style_cyber_mod.h"
+#include <limits>
 
 namespace ggj
 {
@@ -27,6 +28,13 @@ namespace ggj
         bool portEdit {false};
         
         bool createClicked {false};
+    };
+    
+    struct ServerCreateData
+    {
+        bool isValid {false};
+        uint16_t port {0};
+        std::array<char, 31> name{};
     };
     
     class ServerWindow
@@ -50,9 +58,12 @@ namespace ggj
             {
                 if(isActive)
                 {
-                    GuiWindowFloating(&m_serverCreateWindowState.position, &m_serverCreateWindowState.windowSize, &m_serverCreateWindowState.minimized,
-                                      &m_serverCreateWindowState.moving, &m_serverCreateWindowState.resizing, &DrawServerCreate,
-                                      (Vector2) {140, 320}, &m_serverCreateWindowState.scroll, "Host server");
+                    if(m_appState == ApplicationState::ServerInitialize)
+                    {
+                        GuiWindowFloating(&m_serverCreateWindowState.position, &m_serverCreateWindowState.windowSize, &m_serverCreateWindowState.minimized,
+                                          &m_serverCreateWindowState.moving, &m_serverCreateWindowState.resizing, &DrawServerCreate,
+                                          (Vector2) {140, 320}, &m_serverCreateWindowState.scroll, "Host server");
+                    }
                 }
             }
             
@@ -63,14 +74,44 @@ namespace ggj
                 return create;
             }
             
+            ServerCreateData getServerCreateInformation()
+            {
+                int port {};
+                
+                try
+                {
+                    port = std::stoi(m_serverCreateWindowState.port.data());
+                }
+                catch (const std::invalid_argument& e)
+                {
+                    return {};
+                }
+                
+                uint16_t limit = std::numeric_limits<uint16_t>::max();
+                if(port > limit)
+                    port = limit;
+                
+                if(port > 0 && !m_serverCreateWindowState.name.empty())
+                {
+                    return {true, (uint16_t)port, m_serverCreateWindowState.name};
+                }
+                
+                return {};
+            }
+            
+            void setState(ApplicationState state)
+            {
+                m_appState = state;
+            }
+            
             bool isActive = false;
         
         private:
-
             //Vector2 m_scroll;
             
 //            ServerCreateWindowState serverCreateWindowState {{200, 200 }, {0,0}, "13338" };
             ServerCreateWindowState m_serverCreateWindowState {};
+            ApplicationState m_appState {ApplicationState::None};
             
             //std::string m_port{"13338"};
             
@@ -211,36 +252,16 @@ namespace ggj
                     state.nameEdit = true;
                     state.portEdit = false;
                 }
-                GuiLabel((Rectangle) {state.position.x + 20 + state.scroll.x, state.position.y + 100 + state.scroll.y, 100, 25}, "Port: ");
-                if(NumericGuiTextBox((Rectangle) {state.position.x + 120 + state.scroll.x, state.position.y + 100 + state.scroll.y, 100, 25}, state.port.data(), 6,
+                GuiLabel((Rectangle) {state.position.x + 20 + state.scroll.x, state.position.y + 90 + state.scroll.y, 100, 25}, "Port: ");
+                if(NumericGuiTextBox((Rectangle) {state.position.x + 120 + state.scroll.x, state.position.y + 90 + state.scroll.y, 100, 25}, state.port.data(), 6,
                                   state.portEdit))
                 {
                     state.portEdit = true;
                     state.nameEdit = false;
                 }
-                //GuiTextBox((Rectangle) {state.position.x + 120 + state.scroll.x, state.position.y + 100 + state.scroll.y, 100, 25}, state.port.data(), 6, true);
-                if(GuiButton((Rectangle) {state.position.x + 20 + state.scroll.x, state.position.y + 150 + state.scroll.y, 100, 25}, "Create"))
+                if(GuiButton((Rectangle) {state.position.x + 20 + state.scroll.x, state.position.y + 130 + state.scroll.y, 100, 25}, "Create"))
                     state.createClicked = true;
-//                GuiButton((Rectangle) {position.x + 20 + scroll.x, position.y + 50 + scroll.y, 100, 25}, "Button 1");
-//                GuiButton((Rectangle) {position.x + 20 + scroll.x, position.y + 100 + scroll.y, 100, 25}, "Button 2");
-//                GuiButton((Rectangle) {position.x + 20 + scroll.x, position.y + 150 + scroll.y, 100, 25}, "Button 3");
-//                GuiLabel((Rectangle) {position.x + 20 + scroll.x, position.y + 200 + scroll.y, 250, 25}, "A Label");
-//                GuiLabel((Rectangle) {position.x + 20 + scroll.x, position.y + 250 + scroll.y, 250, 25},
-//                         "Another Label");
-//                GuiLabel((Rectangle) {position.x + 20 + scroll.x, position.y + 300 + scroll.y, 250, 25},
-//                         "Yet Another Label");
-            }
-            
-            static void DrawContent(Vector2 position, Vector2 scroll)
-            {
-                GuiButton((Rectangle) {position.x + 20 + scroll.x, position.y + 50 + scroll.y, 100, 25}, "Button 1");
-                GuiButton((Rectangle) {position.x + 20 + scroll.x, position.y + 100 + scroll.y, 100, 25}, "Button 2");
-                GuiButton((Rectangle) {position.x + 20 + scroll.x, position.y + 150 + scroll.y, 100, 25}, "Button 3");
-                GuiLabel((Rectangle) {position.x + 20 + scroll.x, position.y + 200 + scroll.y, 250, 25}, "A Label");
-                GuiLabel((Rectangle) {position.x + 20 + scroll.x, position.y + 250 + scroll.y, 250, 25},
-                         "Another Label");
-                GuiLabel((Rectangle) {position.x + 20 + scroll.x, position.y + 300 + scroll.y, 250, 25},
-                         "Yet Another Label");
+
             }
             
             static bool NumericGuiTextBox(Rectangle bounds, char *text, int textSize, bool editMode)

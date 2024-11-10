@@ -7,19 +7,13 @@
 
 #include "../galder-game-jam-library/GalderGameJamLibrary.h"
 
+#include "ApplicationState.h"
 #include "ServerWindow.hpp"
 #include "ClientWindow.hpp"
 //#include "raygui-cpp/include/raygui-cpp.h"
 
 namespace ggj
 {
-    enum class ApplicationState
-    {
-        None = 0,
-        Server = 1,
-        Client = 2
-    };
-    
     class IServerApplication
     {
         public:
@@ -80,7 +74,12 @@ namespace ggj
                 
                 m_clientTool.update(timeDelta);
                 
-                if(m_state == ApplicationState::Server)
+                if(m_state == ApplicationState::ServerInitialize)
+                {
+                    runServerLogic(timeDelta);
+                }
+                
+                if(m_state == ApplicationState::ClientInitialize)
                 {
                     runServerLogic(timeDelta);
                 }
@@ -91,15 +90,33 @@ namespace ggj
                 m_serverTool.update(timeDelta);
                 if(m_serverTool.createServer())
                 {
-                
+                    auto createData = m_serverTool.getServerCreateInformation();
+                    if(createData.isValid)
+                    {
+                        m_server.initialize(createData.port, createData.name.data());
+                        m_server.run();
+                        m_state = ApplicationState::Server;
+                        m_serverTool.setState(m_state);
+                    }
                 }
             }
             
-            void createNewServer()
+            void runClientLogic(float timeDelta)
             {
-                //m_servers.emplace_back(std::make_unique<GalderServer>(m_logger, m_ipResolver));
-                
+                m_clientTool.update(timeDelta);
+                if(m_clientTool.createClient())
+                {
+                    auto createData = m_clientTool.getClientCreateInformation();
+                    if(createData.isValid)
+                    {
+                        m_client.initialize();
+                        m_client.connect(createData.port, createData.serverIp.data());
+                        m_state = ApplicationState::Client;
+                        m_clientTool.setState(m_state);
+                    }
+                }
             }
+            
             
             void draw() override
             {
@@ -134,19 +151,24 @@ namespace ggj
             
             void renderGui()
             {
-                if(GuiButton((Rectangle) { 300, 0, 200, 50 }, "Server Mode"))
+                if(m_state != ApplicationState::Server && m_state != ApplicationState::Client)
                 {
-                    m_clickedText = "Server";
-                    m_state = ApplicationState::Server;
-                    m_clientTool.isActive = false;
-                    m_serverTool.isActive = true;
-                }
-                if(GuiButton((Rectangle) { 500, 0, 200, 50 }, "Client Mode"))
-                {
-                    m_clickedText = "Client";
-                    m_state = ApplicationState::Client;
-                    m_clientTool.isActive = true;
-                    m_serverTool.isActive = false;
+                    if(GuiButton((Rectangle) {300, 0, 200, 50}, "Server Mode"))
+                    {
+                        m_clickedText = "Server";
+                        m_state = ApplicationState::ServerInitialize;
+                        m_clientTool.isActive = false;
+                        m_serverTool.isActive = true;
+                        m_serverTool.setState(m_state);
+                    }
+                    if(GuiButton((Rectangle) {500, 0, 200, 50}, "Client Mode"))
+                    {
+                        m_clickedText = "Client";
+                        m_state = ApplicationState::ClientInitialize;
+                        m_clientTool.isActive = true;
+                        m_serverTool.isActive = false;
+                        m_clientTool.setState(m_state);
+                    }
                 }
             }
             
