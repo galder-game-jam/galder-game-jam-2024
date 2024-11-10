@@ -83,6 +83,8 @@ namespace ggj
                 m_strToTex["Rogue.png"] = TextureName::RoguePlayer;
                 m_strToTex["Wizard.png"] = TextureName::WizardPlayer;
                 m_strToTex["MageBall.png"] = TextureName::MageBall;
+                m_strToTex["dungeon_prison.png"] = TextureName::DungeonPrison;
+                m_strToTex["dungeon_prison_props.png"] = TextureName::DungeonPrisonProps;
 
                 m_texToRes[TextureName::Player] = ResourceName::GraphicsPlayer;
                 m_texToRes[TextureName::MagicCliffsTileset] = ResourceName::GraphicsMagicCliffsTileset;
@@ -151,6 +153,8 @@ namespace ggj
                 m_texToRes[TextureName::RoguePlayer] = ResourceName::RoguePlayer;
                 m_texToRes[TextureName::WizardPlayer] = ResourceName::WizardPlayer;
                 m_texToRes[TextureName::MageBall] = ResourceName::MageBall;
+                m_texToRes[TextureName::DungeonPrison] = ResourceName::DungeonPrison;
+                m_texToRes[TextureName::DungeonPrisonProps] = ResourceName::DungeonPrisonProps;
             };
 
             TextureName getTextureNameByString(const std::string &id) override

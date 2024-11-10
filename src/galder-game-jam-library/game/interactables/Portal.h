@@ -18,7 +18,7 @@ namespace ggj
             : PhysicsSprite(body, physicsSize, spriteSize, drawingRect, texture, userData, isVisible), m_animationManager {animationManager}, m_mapper{mapper},
               m_velocity{velocity}
             {
-                m_activationTimeInSeconds = (float)portalTime;
+                // m_activationTimeInSeconds = (float)portalTime;
                 m_body->SetFixedRotation(true);
                 m_animation = m_animationManager.getAnimation(AnimationName::PortalIdle);
                 m_body->SetLinearVelocity({m_velocity.x, m_velocity.y});
@@ -28,14 +28,15 @@ namespace ggj
 
             void update(float timeDelta) override;
             void beginContact(PhysicsObject *a, PhysicsObject *b, b2Contact *contact) override;
-            [[nodiscard]] float getTimeUntilPortalOpens() const;
+            // [[nodiscard]] float getTimeUntilPortalOpens() const;
 
         private:
             ggj::World *m_world{nullptr};
 
             // Activation
-            float m_activationTimer{0.f};
-            float m_activationTimeInSeconds{0.f};
+            // float m_activationTimer{0.f};
+            // float m_activationTimeInSeconds{0.f};
+            bool m_hasActivated {false};
 
             //After use
             bool m_hasTeleported = false;

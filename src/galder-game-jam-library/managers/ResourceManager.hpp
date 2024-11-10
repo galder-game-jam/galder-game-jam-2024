@@ -102,6 +102,8 @@ namespace ggj
         add(ggj::ResourceName::RoguePlayer, "graphics/player/Rogue.png");
         add(ggj::ResourceName::WizardPlayer, "graphics/player/Wizard.png");
         add(ggj::ResourceName::MageBall, "graphics/shoot/MageBall.png");
+        add(ggj::ResourceName::DungeonPrison, "graphics/tiles/dungeon_prison.png");
+        add(ggj::ResourceName::DungeonPrisonProps, "graphics/tiles/dungeon_prison_props.png");
     }
 
     template<class T>

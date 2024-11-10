@@ -91,6 +91,8 @@ namespace ggj
         RoguePlayer = 201,
         WizardPlayer = 202,
         MageBall = 203,
+        DungeonPrison = 204,
+        DungeonPrisonProps = 205,
     };
 }
 
