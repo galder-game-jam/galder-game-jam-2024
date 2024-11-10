@@ -8,6 +8,7 @@
 #include "../../enums/ConnectionStatus.hpp"
 #include "../../data/ServerHostInfo.hpp"
 #include <cstdint>
+#include <queue>
 namespace ggj
 {
     template <class TClientData, class TServerData>
@@ -20,11 +21,15 @@ namespace ggj
             [[nodiscard]] virtual ServerHostInfo getServerInfo() const = 0;
             virtual void ping() const = 0;
             virtual void disconnect() const = 0;
-        
+            virtual void queueData(const TClientData &data)
+            {
+                m_queue.push(data);
+            };
         protected:
             virtual bool send(const TClientData &data) = 0;
             virtual TServerData receive() = 0;
             virtual void clientProgram() = 0;
+            std::queue<TClientData> m_queue;
     };
 }
 

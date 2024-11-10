@@ -15,7 +15,11 @@ elseif(WINDOWS)
             ServerWindow.hpp
             style_cyber_mod.h
             ClientWindow.hpp
-            ApplicationState.h)
+            ApplicationState.h
+            TestServeData.hpp
+            TestClientData.hpp
+            TestGalderServer.hpp
+            TestGalderClient.hpp)
     target_link_libraries(ggj-server galder-game-jam-library gamedev_base raylib_cpp raylib fmt box2d GameNetworkingSockets::shared)
     # target_link_options(ggj-server PRIVATE -mwindows)
 else()

@@ -30,8 +30,8 @@ namespace ggj
     {
         public:
             ServerApplication(raylib::Window &window, ILogger &logger, IInputManager<ggj::KeyboardKey> &input, IDebugManager &debugManager,
-                              ggj::IIpAddressResolver &ipResolver, ggj::IExecutableInfo &executable, ggj::IServer<ggj::ServerNetworkData,
-                              ggj::PlayerNetworkData> &server, ggj::IClient<ggj::PlayerNetworkData, ggj::ServerNetworkData> &client) :
+                              ggj::IIpAddressResolver &ipResolver, ggj::IExecutableInfo &executable, ggj::IServer<ggj::TestServerData,
+                              ggj::TestClientData> &server, ggj::IClient<ggj::TestClientData, ggj::TestServerData> &client) :
             m_window {window}, m_logger {logger}, m_input {input}, m_debugManager {debugManager}, m_ipResolver {ipResolver}, m_executable {executable}, m_server {server}, m_client {client}
             {
             
@@ -81,7 +81,7 @@ namespace ggj
                 
                 if(m_state == ApplicationState::ClientInitialize)
                 {
-                    runServerLogic(timeDelta);
+                    runClientLogic(timeDelta);
                 }
             }
             
@@ -106,10 +106,17 @@ namespace ggj
                 m_clientTool.update(timeDelta);
                 if(m_clientTool.createClient())
                 {
-                    auto createData = m_clientTool.getClientCreateInformation();
+                    ClientCreateData createData = m_clientTool.getClientCreateInformation();
                     if(createData.isValid)
                     {
                         m_client.initialize();
+                        
+                        TestClientData data {};
+                        data.nickname = createData.nickname;
+                        data.color = createData.color;
+                        data.isValid = true;
+                        data.position = raylib::Vector2{1337.f, 1337.f};
+                        m_client.queueData(data);
                         m_client.connect(createData.port, createData.serverIp.data());
                         m_state = ApplicationState::Client;
                         m_clientTool.setState(m_state);
@@ -172,10 +179,10 @@ namespace ggj
                 }
             }
             
-            ggj::IServer<ggj::ServerNetworkData, ggj::PlayerNetworkData> &m_server;
-            ggj::IClient<ggj::PlayerNetworkData, ggj::ServerNetworkData> &m_client;
-            //std::vector<std::unique_ptr<ggj::IServer<ggj::ServerNetworkData, ggj::PlayerNetworkData>>> m_servers;
-            //std::vector<std::unique_ptr<ggj::IClient<ggj::PlayerNetworkData, ggj::ServerNetworkData>>> m_clients;
+            ggj::IServer<ggj::TestServerData, ggj::TestClientData> &m_server;
+            ggj::IClient<ggj::TestClientData, ggj::TestServerData> &m_client;
+            //std::vector<std::unique_ptr<ggj::IServer<ggj::TestServerData, ggj::TestClientData>>> m_servers;
+            //std::vector<std::unique_ptr<ggj::IClient<ggj::TestClientData, ggj::TestServerData>>> m_clients;
             
             raylib::Window &m_window;
             ILogger &m_logger;

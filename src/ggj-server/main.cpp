@@ -3,6 +3,10 @@
 #include "fmt/color.h"
 //#include "raylib-cpp.hpp"
 #include <stdio.h>
+#include "TestServeData.hpp"
+#include "TestClientData.hpp"
+#include "TestGalderServer.hpp"
+#include "TestGalderClient.hpp"
 #include "ServerApplication.hpp"
 
 auto buildInjectorForNetworking(ggj::ILogger &logger, raylib::Window &window)
@@ -14,8 +18,8 @@ auto buildInjectorForNetworking(ggj::ILogger &logger, raylib::Window &window)
             boost::di::bind<ggj::IInputManager<ggj::KeyboardKey>>().to<ggj::InputManager>(),
             boost::di::bind<ggj::IDebugManager>().to<ggj::DebugManager>(),
             boost::di::bind<raylib::Window>().to(window),
-            boost::di::bind<ggj::IServer<ggj::ServerNetworkData, ggj::PlayerNetworkData>>().to<ggj::GalderServer>(),
-            boost::di::bind<ggj::IClient<ggj::PlayerNetworkData, ggj::ServerNetworkData>>().to<ggj::GalderClient>(),
+            boost::di::bind<ggj::IServer<ggj::TestServerData, ggj::TestClientData>>().to<ggj::TestGalderServer>(),
+            boost::di::bind<ggj::IClient<ggj::TestClientData, ggj::TestServerData>>().to<ggj::TestGalderClient>(),
             boost::di::bind<ggj::ILogger>().to(logger)
     );
     
