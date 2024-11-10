@@ -14,6 +14,8 @@ auto buildInjectorForNetworking(ggj::ILogger &logger, raylib::Window &window)
             boost::di::bind<ggj::IInputManager<ggj::KeyboardKey>>().to<ggj::InputManager>(),
             boost::di::bind<ggj::IDebugManager>().to<ggj::DebugManager>(),
             boost::di::bind<raylib::Window>().to(window),
+            boost::di::bind<ggj::IServer<ggj::ServerNetworkData, ggj::PlayerNetworkData>>().to<ggj::GalderServer>(),
+            boost::di::bind<ggj::IClient<ggj::PlayerNetworkData, ggj::ServerNetworkData>>().to<ggj::GalderClient>(),
             boost::di::bind<ggj::ILogger>().to(logger)
     );
     

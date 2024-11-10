@@ -13,6 +13,13 @@
 
 namespace ggj
 {
+    enum class ApplicationState
+    {
+        None = 0,
+        Server = 1,
+        Client = 2
+    };
+    
     class IServerApplication
     {
         public:
@@ -29,8 +36,9 @@ namespace ggj
     {
         public:
             ServerApplication(raylib::Window &window, ILogger &logger, IInputManager<ggj::KeyboardKey> &input, IDebugManager &debugManager,
-                              ggj::IIpAddressResolver &ipResolver, ggj::IExecutableInfo &executable) :
-            m_window {window}, m_logger {logger}, m_input {input}, m_debugManager {debugManager}, m_ipResolver {ipResolver}, m_executable {executable}
+                              ggj::IIpAddressResolver &ipResolver, ggj::IExecutableInfo &executable, ggj::IServer<ggj::ServerNetworkData,
+                              ggj::PlayerNetworkData> &server, ggj::IClient<ggj::PlayerNetworkData, ggj::ServerNetworkData> &client) :
+            m_window {window}, m_logger {logger}, m_input {input}, m_debugManager {debugManager}, m_ipResolver {ipResolver}, m_executable {executable}, m_server {server}, m_client {client}
             {
             
             }
@@ -71,10 +79,26 @@ namespace ggj
                 m_debugManager.setText(2, m_clickedText);
                 
                 m_clientTool.update(timeDelta);
-                m_serverTool.update(timeDelta);
                 
-//                m_textBox.Update();
-//                m_popup.Update();
+                if(m_state == ApplicationState::Server)
+                {
+                    runServerLogic(timeDelta);
+                }
+            }
+            
+            void runServerLogic(float timeDelta)
+            {
+                m_serverTool.update(timeDelta);
+                if(m_serverTool.createServer())
+                {
+                
+                }
+            }
+            
+            void createNewServer()
+            {
+                //m_servers.emplace_back(std::make_unique<GalderServer>(m_logger, m_ipResolver));
+                
             }
             
             void draw() override
@@ -113,19 +137,23 @@ namespace ggj
                 if(GuiButton((Rectangle) { 300, 0, 200, 50 }, "Server Mode"))
                 {
                     m_clickedText = "Server";
+                    m_state = ApplicationState::Server;
                     m_clientTool.isActive = false;
                     m_serverTool.isActive = true;
                 }
                 if(GuiButton((Rectangle) { 500, 0, 200, 50 }, "Client Mode"))
                 {
                     m_clickedText = "Client";
+                    m_state = ApplicationState::Client;
                     m_clientTool.isActive = true;
                     m_serverTool.isActive = false;
                 }
             }
             
-            std::vector<std::unique_ptr<ggj::IServer<ggj::ServerNetworkData, ggj::PlayerNetworkData>>> m_servers;
-            std::vector<std::unique_ptr<ggj::IClient<ggj::PlayerNetworkData, ggj::ServerNetworkData>>> m_clients;
+            ggj::IServer<ggj::ServerNetworkData, ggj::PlayerNetworkData> &m_server;
+            ggj::IClient<ggj::PlayerNetworkData, ggj::ServerNetworkData> &m_client;
+            //std::vector<std::unique_ptr<ggj::IServer<ggj::ServerNetworkData, ggj::PlayerNetworkData>>> m_servers;
+            //std::vector<std::unique_ptr<ggj::IClient<ggj::PlayerNetworkData, ggj::ServerNetworkData>>> m_clients;
             
             raylib::Window &m_window;
             ILogger &m_logger;
@@ -136,6 +164,7 @@ namespace ggj
             raylib::Color m_backgroundColor = raylib::Color(8, 140, 197);
             Font m_font{};
             float m_lastTimeDelta {};
+            ApplicationState m_state {ApplicationState::None};
             
             raylib::Vector2 m_originalWindowSize;
             raylib::RenderTexture2D m_renderTexture;
@@ -145,7 +174,7 @@ namespace ggj
             
             std::string m_localIp = "";
             std::string m_publicIp = "";
-            std::string m_clickedText = "Temp";
+            std::string m_clickedText = "";
             
             //Gui
 //            rgc::WindowBox m_popup{};

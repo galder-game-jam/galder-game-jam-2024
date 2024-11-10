@@ -11,6 +11,24 @@
 
 namespace ggj
 {
+    struct ServerCreateWindowState
+    {
+        //Vector2 windowPosition = {200, 200 };
+        Vector2 windowSize = {500, 400 };
+        bool minimized = false;
+        bool moving = false;
+        bool resizing = false;
+        Vector2 position {};
+        Vector2 scroll {};
+        std::array<char, 6> port {"13338"};
+        std::array<char, 31> name {"Galder's kosebur"};
+        
+        bool nameEdit {false};
+        bool portEdit {false};
+        
+        bool createClicked {false};
+    };
+    
     class ServerWindow
     {
         public:
@@ -18,6 +36,8 @@ namespace ggj
             
             bool initialize()
             {
+                m_serverCreateWindowState.position = {200, 200 };
+                m_serverCreateWindowState.scroll = {0,0};
                 return true;
             }
             
@@ -30,25 +50,32 @@ namespace ggj
             {
                 if(isActive)
                 {
-                    GuiWindowFloating(&m_windowPosition, &m_windowSize, &m_minimized, &m_moving, &m_resizing, &DrawServerCreate,
-                                      (Vector2) {140, 320}, &m_scroll, "Host server");
+                    GuiWindowFloating(&m_serverCreateWindowState.position, &m_serverCreateWindowState.windowSize, &m_serverCreateWindowState.minimized,
+                                      &m_serverCreateWindowState.moving, &m_serverCreateWindowState.resizing, &DrawServerCreate,
+                                      (Vector2) {140, 320}, &m_serverCreateWindowState.scroll, "Host server");
                 }
+            }
+            
+            bool createServer()
+            {
+                bool create = m_serverCreateWindowState.createClicked;
+                m_serverCreateWindowState.createClicked = false;
+                return create;
             }
             
             bool isActive = false;
         
         private:
-            Vector2 m_windowPosition = {200, 200 };
-            Vector2 m_windowSize = {400, 400 };
-            bool m_minimized = false;
-            bool m_moving = false;
-            bool m_resizing = false;
-            Vector2 m_scroll;
+
+            //Vector2 m_scroll;
             
-            std::string m_port{};
+//            ServerCreateWindowState serverCreateWindowState {{200, 200 }, {0,0}, "13338" };
+            ServerCreateWindowState m_serverCreateWindowState {};
+            
+            //std::string m_port{"13338"};
             
             void GuiWindowFloating(Vector2 *position, Vector2 *size, bool *minimized, bool *moving, bool *resizing,
-                                   void (*draw_content)(Vector2, Vector2, std::string&), Vector2 content_size, Vector2 *scroll,
+                                   void (*draw_content)(ServerCreateWindowState&), Vector2 content_size, Vector2 *scroll,
                                    const char *title)
             {
                 #if !defined(RAYGUI_WINDOWBOX_STATUSBAR_HEIGHT)
@@ -76,7 +103,8 @@ namespace ggj
                     if(CheckCollisionPointRec(mouse_position, title_collision_rect))
                     {
                         *moving = true;
-                    } else if(!*minimized && CheckCollisionPointRec(mouse_position, resize_collision_rect))
+                    }
+                    else if(!*minimized && CheckCollisionPointRec(mouse_position, resize_collision_rect))
                     {
                         *resizing = true;
                     }
@@ -162,7 +190,7 @@ namespace ggj
                             BeginScissorMode(scissor.x, scissor.y, scissor.width, scissor.height);
                         }
                         
-                        draw_content(*position, *scroll, m_port);
+                        draw_content(m_serverCreateWindowState);
                         
                         if(require_scissor)
                         {
@@ -175,11 +203,24 @@ namespace ggj
                 }
             }
             
-            static void DrawServerCreate(Vector2 position, Vector2 scroll, std::string &port)
+            static void DrawServerCreate(ServerCreateWindowState &state)//(Vector2 position, Vector2 scroll, std::string &port)
             {
-                GuiLabel((Rectangle) {position.x + 20 + scroll.x, position.y + 50 + scroll.y, 100, 25}, "Port: ");
-                GuiTextBox((Rectangle) {position.x + 120 + scroll.x, position.y + 50 + scroll.y, 100, 25}, port.data(), 6, true);
-                GuiButton((Rectangle) {position.x + 20 + scroll.x, position.y + 150 + scroll.y, 100, 25}, "Create");
+                GuiLabel((Rectangle) {state.position.x + 20 + state.scroll.x, state.position.y + 50 + state.scroll.y, 100, 25}, "Name: ");
+                if(GuiTextBox((Rectangle) {state.position.x + 120 + state.scroll.x, state.position.y + 50 + state.scroll.y, 300, 25}, state.name.data(), 30, state.nameEdit))
+                {
+                    state.nameEdit = true;
+                    state.portEdit = false;
+                }
+                GuiLabel((Rectangle) {state.position.x + 20 + state.scroll.x, state.position.y + 100 + state.scroll.y, 100, 25}, "Port: ");
+                if(NumericGuiTextBox((Rectangle) {state.position.x + 120 + state.scroll.x, state.position.y + 100 + state.scroll.y, 100, 25}, state.port.data(), 6,
+                                  state.portEdit))
+                {
+                    state.portEdit = true;
+                    state.nameEdit = false;
+                }
+                //GuiTextBox((Rectangle) {state.position.x + 120 + state.scroll.x, state.position.y + 100 + state.scroll.y, 100, 25}, state.port.data(), 6, true);
+                if(GuiButton((Rectangle) {state.position.x + 20 + state.scroll.x, state.position.y + 150 + state.scroll.y, 100, 25}, "Create"))
+                    state.createClicked = true;
 //                GuiButton((Rectangle) {position.x + 20 + scroll.x, position.y + 50 + scroll.y, 100, 25}, "Button 1");
 //                GuiButton((Rectangle) {position.x + 20 + scroll.x, position.y + 100 + scroll.y, 100, 25}, "Button 2");
 //                GuiButton((Rectangle) {position.x + 20 + scroll.x, position.y + 150 + scroll.y, 100, 25}, "Button 3");
@@ -201,6 +242,32 @@ namespace ggj
                 GuiLabel((Rectangle) {position.x + 20 + scroll.x, position.y + 300 + scroll.y, 250, 25},
                          "Yet Another Label");
             }
+            
+            static bool NumericGuiTextBox(Rectangle bounds, char *text, int textSize, bool editMode)
+            {
+                // Call GuiTextBox with editMode to allow editing
+                bool result = GuiTextBox(bounds, text, textSize, editMode);
+
+                // Process each character to allow only digits
+                if (editMode)
+                {
+                    int length = strlen(text);
+                    for (int i = 0; i < length; i++)
+                    {
+                        // Check if the character is a digit
+                        if (!isdigit(text[i]))
+                        {
+                            // Shift all characters after the non-digit one position to the left
+                            memmove(&text[i], &text[i + 1], length - i);
+                            length--; // Adjust length due to removed character
+                            i--; // Adjust loop index
+                        }
+                    }
+                }
+
+                return result;
+            }
+
     };
 }
 
