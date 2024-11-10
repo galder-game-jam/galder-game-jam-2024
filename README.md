@@ -1,25 +1,33 @@
 # Galder Game Jam 2024
 
-A game jam with André Søberg and Robin Berg Pettersen that found place on 3.-5.november 2024.
+A game jam with André Søberg and Robin Berg Pettersen that found place on 8.-10. November 2024.
 
 # The Game
 
 - `galder-game-jam-2024` contains simple code to showcase a very minimal
-  and simple game concept.
+  and simple game concept for a top-down RPG.
 - When compiled as `Debug` you also get:
     - The option to go to switch maps using the `F1`/`F2` keys.
-    - Toggle infinite jump by pressing `F9`
+    - Toggle visible hit boxes by pressing `F9`
     - Debug text via the debug manager.
-- Player1 controls: - `A`/`D`: Move left/right. `W`: Jump. `C`: Hit. `Space`: Toggle sprite rotating with physics
-  engine. `Enter`: Toggle camera following player. (Debug mode only)
-- Player1 controls: - `Left`/`Right`: Move left/right. `Up`: Jump. `K`: Hit. `L`: Toggle sprite rotating with physics
-  engine.
+- Player1 controls:
+  - `W`/`A`/`S`/`D`: Move character
+  - `C`: Attack with daggers
+  - `Q` to respawn if you die
+  - `Space`: Toggle sprite rotating with physics engine
+  - `Enter`: Toggle camera following player. (Debug mode only)
+- Player2 controls
+  - `Up`/`Left`/`Down`/`Right`: Move character
+  - `K`: Use mage spell
+  - `J` to respawn if you die
+  - `L`: Toggle sprite rotating with physics engine.
 
-![](content/ggj-2023.gif)
+![](content/ggj-2024.gif)
 
-- The objective of the game is simple: Grab as many coins as you can before the portal opens! Fight the other player to
-  kill him/her. Every death costs one coin. Only the player with the most coins can enter the portal and win! :
-  monocle_face:
+- The objective of the game is simple:
+  - Cooperate to kill all enemies to open portal to advance to the next level.
+  - Collect coins to gather points
+  - You have three lives before dying (every death costs one coin)
 
 - All the content for the game is located inside the `content/game/content` folder. All the content inside the
   last `content` folder there is copied automatically to the output bin path via `CMake` when the `CMakeLists.txt`
@@ -31,19 +39,19 @@ A game jam with André Søberg and Robin Berg Pettersen that found place on 3.-5
   files, make sure things are loaded through opening the `gamedev.tiled-project` in `Tiled`. The reason why this is
   important is that some types can only be resolved through the common `tiled-project`.
 
-![](content/ggj-2023-tiled.png)
+![](content/ggj-2024-tiled.png)
 
 # Game design document
 
-Since the whole design process was a part of the game jam, the game design document is very limited, but
-we have written down the [brainstorming](design/brainstorming/README.md) ideas.
-As expected: Only a few of the ideas were small enough to fit the scope of creating a working game engine
-with a playable game on a weekend.
+Instead of a brainstorming-document, we created a roadmap on GitHub using issues for each idea we wanted to implement:
+https://github.com/galder-game-jam/galder-game-jam-2024/issues/1
+
+As expected: Only a few of the ideas were small enough to fit the scope of creating a playable prototype-game in the course of a weekend.
 
 # Development
 
 - CMake is used as the build system, and `CLion` was used as `IDE`.
-- Development has been done using `GCC 12.1`, so it's recommended to use an up-to-date version of `GCC`.
+- Development has been done using `GCC 14.2.1`, so it's recommended to use an up-to-date version of `GCC`.
 - The `MSVC` version bundled with `Visual Studio 2022` `v17.4.0` was used for the Windows build.
 
 # Libraries used
