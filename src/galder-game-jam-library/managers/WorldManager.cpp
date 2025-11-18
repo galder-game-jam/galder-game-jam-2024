@@ -86,7 +86,8 @@ namespace ggj
     {
         #ifdef GAME_DEV_DEBUG
         if (m_input.keyPressed(ggj::KeyboardKey::F1)) m_currentStageIndex = 1;
-        if (m_input.keyPressed(ggj::KeyboardKey::F2)) m_currentStageIndex = FINAL_MAP_ID;
+        if (m_input.keyPressed(ggj::KeyboardKey::F2)) m_currentStageIndex = 2;
+        if (m_input.keyPressed(ggj::KeyboardKey::F3)) m_currentStageIndex = FINAL_MAP_ID;
         #endif
 
         if (m_currentStageIndex == NO_MAP_ID)

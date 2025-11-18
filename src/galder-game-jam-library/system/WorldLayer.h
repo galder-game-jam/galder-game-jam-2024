@@ -8,6 +8,7 @@
 #include "raylib-cpp.hpp"
 #include "../../gamedev-base/GameDevBase.h"
 #include <functional>
+#include <utility>
 
 namespace ggj
 {
@@ -16,7 +17,8 @@ namespace ggj
         public:
 
             WorldLayer() = default;
-            WorldLayer(int32_t layerNumber, bool disableUpdate) : m_layer {layerNumber}, m_disableUpdate {disableUpdate}
+            WorldLayer(int32_t layerNumber, bool disableUpdate, std::string name)
+        : m_layer {layerNumber}, m_name {std::move(name)}, m_disableUpdate {disableUpdate}
             {
 
             }
@@ -30,10 +32,16 @@ namespace ggj
 
             [[nodiscard]] int32_t getLayer() const;
 
+            [[nodiscard]] std::string getName() const
+            {
+                return m_name;
+            }
+
             void setLayer(int32_t layer);
 
         private:
             int32_t m_layer {};
+            std::string m_name{};
             bool m_disableUpdate {};
             std::vector<std::unique_ptr<ggj::IGameObject<raylib::Vector2>>> m_gameObjects;
     };

@@ -18,7 +18,6 @@ namespace ggj
                     : PhysicsSprite(body, physicsSize, spriteSize, drawingRect, texture, userData, isVisible), m_animationManager {animationManager}, m_mapper{mapper},
                       m_velocity{velocity}
             {
-                m_body->SetGravityScale(1.f);
                 m_body->SetFixedRotation(true);
                 m_animation = m_animationManager.getAnimation(AnimationName::EnemySpiderWalk);
                 m_body->SetLinearVelocity({m_velocity.x, m_velocity.y});
@@ -36,7 +35,6 @@ namespace ggj
             IMapper &m_mapper;
             Animation m_animation;
             raylib::Vector2 m_velocity {0.f, 0.f};
-//            b2MassData m_massData{};
 
     };
 

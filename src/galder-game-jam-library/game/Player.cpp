@@ -19,8 +19,8 @@ namespace ggj
 
         if(m_isDead)
         {
-            m_isDead = false;
-            m_body->SetTransform(ConvertToB2Vec2(m_startPos), m_body->GetAngle());
+            setPlayerState(PlayerState::Dead);
+            m_body->SetEnabled(false);
         }
         PhysicsObject::update(timeDelta);
 
@@ -39,13 +39,28 @@ namespace ggj
 
     void Player::handleInputs(float timeDelta)
     {
+        if(m_isDead)
+        {
+            if(m_inputManager.keyDown(KeyboardKey::Q))
+            {
+                m_body->SetTransform(ConvertToB2Vec2(m_startPos), m_body->GetAngle());
+                setPlayerState(PlayerState::Idle);
+                m_isDead = false;
+                m_lives = 3;
+                m_hitbox.setIsActive(true);
+                m_body->SetEnabled(true);
+            }
+            else
+                return;
+        }
+
         //Should have a collection of commands or something assigned to the player for a best practice approach
         //But this is just meant to be a quick example
         b2Vec2 vel = m_body->GetLinearVelocity();
         m_velocity = raylib::Vector2{vel.x, vel.y};
         
         bool isInAir = m_velocity.y > 0.2f || m_velocity.y < -0.2f;
-        
+
         if(!m_isAttacking || isInAir)
         {
             if(m_inputManager.keyDown(KeyboardKey::A) && !m_inputManager.keyDown(KeyboardKey::D))
@@ -86,20 +101,9 @@ namespace ggj
                 m_velocity = raylib::Vector2{m_velocity.x, 0.f};
             }
         }
-
-        //Jump
-        // if(m_inputManager.keyPressed(KeyboardKey::W) && m_jumps < m_maxJumps)
-        // {
-        //     ++m_jumps;
-        //     m_velocity = raylib::Vector2{m_velocity.x, m_velocity.y - 5.f};
-        // }
         
         if(m_inputManager.keyPressed(KeyboardKey::C) && !m_isAttacking)
         {
-            // if(m_velocity.y > 0.2f || m_velocity.y < -0.2f)
-            //     setPlayerState(PlayerState::AttackAir);
-            // else
-            //     setPlayerState(PlayerState::AttackGrounded);
             setPlayerState(PlayerState::AttackGrounded);
             m_isAttacking = true;
             m_attackCounter = 0;
@@ -108,10 +112,7 @@ namespace ggj
         #ifdef GAME_DEV_DEBUG
         if(m_inputManager.keyPressed(KeyboardKey::F9))
         {
-            if(m_maxJumps == 2)
-                m_maxJumps = 10000;
-            else
-                m_maxJumps = 2;
+            m_hitbox.setVisible(!m_hitbox.isVisible());
         }
         //Toggle camera-follow
         if(m_inputManager.keyPressed(KeyboardKey::Enter))
@@ -131,18 +132,10 @@ namespace ggj
 
         if(!m_isAttacking)
         {
-            if(m_velocity.x == 0 && m_velocity.y == 0)
+            if(m_velocity.x == 0 && m_velocity.y == 0 && !m_isDead)
             {
                 setPlayerState(PlayerState::Idle);
             }
-            // else if(m_velocity.y > 0.2f)
-            // {
-            //     setPlayerState(PlayerState::Fall);
-            // }
-            // else if(m_velocity.y < -0.2f)
-            // {
-            //     setPlayerState(PlayerState::Jump);
-            // }
         }
         
         if(m_isAttacking)
@@ -158,11 +151,6 @@ namespace ggj
             m_hitbox.getBody()->SetTransform(PhysicsObject::ConvertToB2Vec2({m_position.x-12, m_position.y-8}), 0);
         else
             m_hitbox.getBody()->SetTransform(PhysicsObject::ConvertToB2Vec2({m_position.x+12, m_position.y-8}), 0);
-    }
-
-    const Vector2 &Player::getVelocity() const
-    {
-        return m_velocity;
     }
 
     bool Player::cameraShouldFollowPlayer() const
@@ -181,18 +169,18 @@ namespace ggj
 
     void Player::beginContact(PhysicsObject *a, PhysicsObject *b, b2Contact *contact)
     {
-        b2Manifold *manifold = contact->GetManifold();
         b2WorldManifold worldManifold;
         contact->GetWorldManifold(&worldManifold); //Required to calculate manifold when circle hits circle
-
-        if(manifold->localNormal.y < -0.8f || worldManifold.normal.y > 0.5f)
-            m_jumps = 0;
 
         if(b->getUserData()->getObjectType() == ObjectType::Enemy)
         {
             if(m_score != 0)
                 --m_score;
-            m_isDead = true;
+
+            --m_lives;
+
+            if(m_lives <= 0)
+                m_isDead = true;
         }
         if(b->getUserData()->getCommand() == "clear_level")
         {
@@ -204,9 +192,14 @@ namespace ggj
         }
     }
 
-    int Player::getScore()
+    int Player::getScore() const
     {
         return m_score;
+    }
+
+    int Player::getLives() const
+    {
+        return m_lives;
     }
 
     bool Player::hasClearedLevel() const

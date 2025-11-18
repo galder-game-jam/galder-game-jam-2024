@@ -87,7 +87,12 @@ namespace ggj
         GraphicsCoin = 177,
         GraphicsPortal = 178,
 
-        TopDownForest = 200
+        TopDownForest = 200,
+        RoguePlayer = 201,
+        WizardPlayer = 202,
+        MageBall = 203,
+        DungeonPrison = 204,
+        DungeonPrisonProps = 205,
     };
 }
 

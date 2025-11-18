@@ -64,6 +64,11 @@ namespace ggj
         return radians * (180.0/PI);
     }
 
+    raylib::Vector2 PhysicsObject::getVelocity() const
+    {
+        return m_velocity;
+    }
+
     UserData* PhysicsObject::getUserData()
     {
         return &m_userData;

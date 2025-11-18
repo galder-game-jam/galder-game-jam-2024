@@ -17,6 +17,7 @@ namespace ggj
         PowerUp = 4,
         Coin = 5,
         Portal = 6,
+        Projectile = 7
     };
 
 } // ggj

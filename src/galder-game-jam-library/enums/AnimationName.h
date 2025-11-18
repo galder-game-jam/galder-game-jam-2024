@@ -29,11 +29,18 @@ namespace ggj
         PortalClosed = 16,
         PlayerIdleNG = 17,
         PlayerWalkNG = 18,
-        PlayerJumpNG = 19,
-        PlayerFallNG = 20,
         PowerUpCycle = 21,
-        PlayerAttackGroundedNG = 22,
-        PlayerAttackAirNG = 23
+        RogueIdle = 24,
+        RogueRun = 25,
+        RogueDeath = 26,
+        RogueAttackSwing = 27,
+        RogueAttackStab = 28,
+        MageBallFlightYellow = 29,
+        MageBallImpactYellow = 30,
+        MageBallFlightBlue = 31,
+        MageBallImpactBlue = 32,
+        MageBallFlightRed = 33,
+        MageBallImpactRed = 34,
     };
 
 } // ggj

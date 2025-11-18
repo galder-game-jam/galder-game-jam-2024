@@ -17,11 +17,7 @@ auto buildInjector(ggj::ILogger &logger, raylib::Window &window)
             boost::di::bind<ggj::IUserDataManager<ggj::PhysicsObject*>>().to<ggj::UserDataManager>(),
 
             boost::di::bind<ggj::IExecutableInfo>().to<ggj::ExecutableInfo>(),
-            #ifdef GAME_DEV_DEBUG
             boost::di::bind<ggj::IDebugManager>().to<ggj::DebugManager>(),
-            #else
-            boost::di::bind<ggj::IDebugManager>().to<ggj::DummyDebugManager>(),
-            #endif
             boost::di::bind<ggj::CollisionManager>(),
             boost::di::bind<raylib::Window>().to(window),
             boost::di::bind<ggj::ILogger>().to(logger)

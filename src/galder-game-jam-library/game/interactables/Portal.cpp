@@ -7,13 +7,18 @@ namespace ggj
     {
         if(b->getUserData()->getObjectType() == ObjectType::Player)
         {
-            if (!m_hasTeleported && m_activationTimer > m_activationTimeInSeconds)
+            // if (!m_hasTeleported && m_activationTimer > m_activationTimeInSeconds)
+            // {
+            //     if(m_world->getLeadingPlayer() == "both" || m_world->getLeadingPlayer() == b->getUserData()->getName())
+            //     {
+            //         m_hasTeleported = true;
+            //         teleport();
+            //     }
+            // }
+            if (!m_hasTeleported && m_world->getNumberOfEnemiesLeft() == 0)
             {
-                if(m_world->getLeadingPlayer() == "both" || m_world->getLeadingPlayer() == b->getUserData()->getName())
-                {
-                    m_hasTeleported = true;
-                    teleport();
-                }
+                m_hasTeleported = true;
+                teleport();
             }
         }
     }
@@ -23,11 +28,16 @@ namespace ggj
         if(m_body == nullptr)
             return;
 
-        if(m_activationTimer < m_activationTimeInSeconds)
+        // if(m_activationTimer < m_activationTimeInSeconds)
+        // {
+        //     m_activationTimer += timeDelta;
+        //     if(m_activationTimer > m_activationTimeInSeconds)
+        //         activate();
+        // }
+        if(!m_hasActivated && m_world->getNumberOfEnemiesLeft() == 0)
         {
-            m_activationTimer += timeDelta;
-            if(m_activationTimer > m_activationTimeInSeconds)
-                activate();
+            m_hasActivated = true;
+            activate();
         }
         else if(m_hasTeleported && m_teleportTime > 0)
         {
@@ -63,8 +73,8 @@ namespace ggj
     {
         m_animation = m_animationManager.getAnimation(AnimationName::PortalIdle);
     }
-
-    float Portal::getTimeUntilPortalOpens() const {
-        return m_activationTimeInSeconds - m_activationTimer;
-    }
+    //
+    // float Portal::getTimeUntilPortalOpens() const {
+    //     return m_activationTimeInSeconds - m_activationTimer;
+    // }
 } // ggj

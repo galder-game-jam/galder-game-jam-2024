@@ -42,7 +42,7 @@ namespace ggj
             if (layer.getType() == tson::LayerType::TileLayer)
             {
                 if (m_layers.count(layerIndex) == 0)
-                    m_layers[layerIndex] = {layerIndex, true}; //Tiles are only for drawing and will not be updated
+                    m_layers[layerIndex] = {layerIndex, true, layer.getName()}; //Tiles are only for drawing and will not be updated
 
                 for (auto &tileObject: layer.getTileObjects())
                 {
@@ -66,7 +66,7 @@ namespace ggj
             else if (layer.getType() == tson::LayerType::ObjectGroup)
             {
                 if (m_layers.count(layerIndex) == 0)
-                    m_layers[layerIndex] = {layerIndex, false}; //Objects will have their positions updated!
+                    m_layers[layerIndex] = {layerIndex, false, layer.getName()}; //Objects will have their positions updated!
 
                 for (auto &obj: layer.getObjects())
                 {
@@ -234,13 +234,16 @@ namespace ggj
                               : m_cameraDefault;
 
             Colori color = {0, 50, 150, 255};
-            m_debugManager.setText(1, fmt::format("Player1Pos: ({0}, {1})", (int) m_player->getPosition().x, (int) m_player->getPosition().y), color);
-            m_debugManager.setText(2, fmt::format("Player2Pos: ({0}, {1})", (int) m_player2->getPosition().x, (int) m_player2->getPosition().y), color);
-            m_debugManager.setText(3, fmt::format("CameraPos: ({0}, {1})", (int) m_camera.target.x, (int) m_camera.target.y), color);
-            m_debugManager.setText(4, fmt::format("Player1 score: {0}", (int) m_player->getScore()), color);
-            m_debugManager.setText(5, fmt::format("Player2 score: {0}", (int) m_player2->getScore()), color);
-            m_debugManager.setText(6, fmt::format("Current leader: {0}", getLeadingPlayer()), color);
-            m_debugManager.setText(7, fmt::format("Portal timer: {0}", (int) m_portal->getTimeUntilPortalOpens()), color);
+
+            m_debugManager.setText(1, fmt::format("Player1 | coins: {0} | lives: {1} | kills: {2} | position: ({3},{4})", m_player->getScore(), m_player->getLives(), m_player->getUserData()->enemiesKilled, (int) m_player->getPosition().x, (int) m_player->getPosition().y), color);
+            m_debugManager.setText(2, fmt::format("Player2 | coins: {0} | lives: {1} | kills: {2} | position: ({3},{4})", m_player2->getScore(), m_player2->getLives(), m_player2->getUserData()->enemiesKilled, (int) m_player2->getPosition().x, (int) m_player2->getPosition().y), color);
+
+            m_debugManager.setText(3, fmt::format("Enemies: {0} ({1} remaining) {2}", (int) m_numberOfEnemies, getNumberOfEnemiesLeft(), getNumberOfEnemiesLeft() == 0 ? "Portal open":"Portal closed"), color);
+#ifdef GAME_DEV_DEBUG
+            m_debugManager.setText(4, fmt::format("Current leader: {0}", getLeadingPlayer()), color);
+            m_debugManager.setText(5, fmt::format("CameraPos: ({0}, {1})", (int) m_camera.target.x, (int) m_camera.target.y), color);
+#endif
+
         }
 
         if (m_camera.target.x > m_cameraMax.x)
@@ -273,17 +276,32 @@ namespace ggj
         else if (name == "player2")
             generatePlayer2(name, body, generatorData);
         else if (name == "bat")
+        {
             generateBat(name, body, generatorData);
+            ++m_numberOfEnemies;
+        }
         else if (name == "snake")
+        {
             generateSnake(name, body, generatorData);
+            ++m_numberOfEnemies;
+        }
         else if (name == "coin")
             generateCoin(name, body, generatorData);
         else if (name == "spider")
+        {
             generateSpider(name, body, generatorData);
+            ++m_numberOfEnemies;
+        }
         else if (name == "thing")
+        {
             generateThing(name, body, generatorData);
+            ++m_numberOfEnemies;
+        }
         else if (name == "ghost")
+        {
             generateGhost(name, body, generatorData);
+            ++m_numberOfEnemies;
+        }
         else if (name == "portal")
             generatePortal(name, body, generatorData);
         else if (name == "powerup")
@@ -350,7 +368,7 @@ namespace ggj
 
                 raylib::Vector2 spriteSize = raylib::Vector2(r.width, r.height);
 
-                m_player2 = m_layers[generatorData.layerIndex].createGameObject<ggj::Player2>(m_input, m_animationManager, m_mapper, body,
+                m_player2 = m_layers[generatorData.layerIndex].createGameObject<ggj::Player2>(this, m_input, m_animationManager, m_mapper, body,
                                                                                             raylib::Vector2((float) generatorData.size.x,
                                                                                                             (float) generatorData.size.y),
                                                                                             spriteSize, r,
@@ -692,12 +710,28 @@ namespace ggj
         }
     }
 
-    std::string World::getLeadingPlayer() {
+    int World::getNumberOfEnemiesLeft() const
+    {
+        const int enemiesLeft = m_numberOfEnemies - (m_player->getUserData()->enemiesKilled + m_player2->getUserData()->enemiesKilled);
+        return enemiesLeft;
+    }
+
+    std::string World::getLeadingPlayer() const
+    {
         if(m_player->getScore() > m_player2->getScore())
             return m_player->getUserData()->getName();
         if(m_player->getScore() < m_player2->getScore())
             return m_player2->getUserData()->getName();
-        else
-            return "both";
+        return "both";
+    }
+
+    int World::getEnemies() const
+    {
+        return m_numberOfEnemies;
+    }
+
+    void World::reduceEnemyKillCountByOne()
+    {
+        --m_numberOfEnemies;
     }
 }

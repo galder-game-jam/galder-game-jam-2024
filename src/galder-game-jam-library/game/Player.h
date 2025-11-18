@@ -28,18 +28,18 @@ namespace ggj
                 m_animation = m_animationManager.getAnimation(AnimationName::PlayerIdleNG);
                 m_startPos = ConvertToVector2(m_body->GetPosition());
                 
-                //Create hitbox
-                raylib::Vector2 hitboxPos = PhysicsObject::ConvertToVector2(m_body->GetPosition());
-                hitboxPos = raylib::Vector2(hitboxPos.GetX() + 16, hitboxPos.y);
-                m_hitbox.create(this, m_body->GetWorld(), hitboxPos, {16, 16});
+                const raylib::Vector2 bodyPosition = ConvertToVector2(m_body->GetPosition());
+                auto hitBoxPos = raylib::Vector2(bodyPosition.x + 16, bodyPosition.y);
+                m_hitbox.create(this, m_body->GetWorld(), hitBoxPos, {32, 32});
+                setPlayerState(PlayerState::Idle);
             }
 
-            [[nodiscard]] const Vector2 &getVelocity() const;
             [[nodiscard]] bool cameraShouldFollowPlayer() const;
             bool hasClearedLevel() const;
             void setHasClearedLevel(bool hasClearedLevel);
             void beginContact(PhysicsObject *a, PhysicsObject *b, b2Contact *contact) override;
-            int getScore();
+            int getScore() const;
+            int getLives() const;
             void update(float timeDelta) override;
             void draw() override;
             Hitbox *getHitbox();
@@ -50,11 +50,10 @@ namespace ggj
 
             ggj::IInputManager<ggj::KeyboardKey> &m_inputManager;
             ggj::IAnimationManager<ggj::Animation, ggj::AnimationName> &m_animationManager;
-            raylib::Vector2 m_velocity {0.f, 0.f};
             bool m_cameraShouldFollowPlayer {true};
             Animation m_animation;
             IMapper &m_mapper;
-            PlayerState m_playerState{PlayerState::Idle};
+            PlayerState m_playerState{PlayerState::Dead};
 
             raylib::Vector2 m_startPos{};
             bool m_hasClearedLevel {false};
@@ -63,12 +62,11 @@ namespace ggj
             
             ggj::Hitbox m_hitbox{};
             bool m_isAttacking {false};
-            uint16_t m_attackFrames {20}; //How many frames an attack takes
+            uint16_t m_attackFrames {30}; //How many frames an attack takes
             uint16_t m_attackCounter {0}; //Counts attack duration
-            
-            int m_maxJumps{2};
-            int m_jumps{0};
-            int m_score{0};
+
+            int m_score{};
+            int m_lives{3};
     };
 
 } // dev
