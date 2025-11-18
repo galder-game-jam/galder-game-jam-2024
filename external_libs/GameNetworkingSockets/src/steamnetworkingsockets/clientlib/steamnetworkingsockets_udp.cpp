@@ -74,6 +74,23 @@ void ReallyReportBadUDPPacket( const char *pszFrom, const char *pszMsgType, cons
 		} \
 	}
 
+// Return the effective value of IP_AllowWithoutAuth, checking for giving
+// localhost peers more permissive value
+static int GetIPAllowWithoutAuth( const ConnectionConfig &cfg, bool bIsLocalHost )
+{
+	int result = cfg.IP_AllowWithoutAuth.Get();
+
+	// Check if peer is a localhost address, we might be more permissive
+	if ( bIsLocalHost )
+	{
+
+		// Take whichever option is more permissive
+		result = std::max( result, cfg.IPLocalHost_AllowWithoutAuth.Get() );
+	}
+
+	return result;
+}
+
 /////////////////////////////////////////////////////////////////////////////
 //
 // CSteamNetworkListenSocketDirectUDP
@@ -349,7 +366,7 @@ void CSteamNetworkListenSocketDirectUDP::Received_ConnectRequest( const CMsgStea
 
 		if ( identityRemote.IsLocalHost() )
 		{
-			if ( m_connectionConfig.IP_AllowWithoutAuth.Get() == 0 )
+			if ( GetIPAllowWithoutAuth( m_connectionConfig, adrFrom.IsLoopback() ) == 0 )
 			{
 				// Should we send an explicit rejection here?
 				ReportBadPacket( "ConnectRequest", "Unauthenticated connections not allowed." );
@@ -521,46 +538,56 @@ int CConnectionTransportUDPBase::SendEncryptedDataChunk( const void *pChunk, int
 {
 	UDPSendPacketContext_t &ctx = static_cast<UDPSendPacketContext_t &>( ctxBase );
 
-	uint8 pkt[ k_cbSteamNetworkingSocketsMaxUDPMsgLen ];
-	UDPDataMsgHdr *hdr = (UDPDataMsgHdr *)pkt;
-	hdr->m_unMsgFlags = 0x80;
-	Assert( m_connection.m_unConnectionIDRemote != 0 );
-	hdr->m_unToConnectionID = LittleDWord( m_connection.m_unConnectionIDRemote );
-	hdr->m_unSeqNum = LittleWord( m_connection.m_statsEndToEnd.ConsumeSendPacketNumberAndGetWireFmt( ctx.m_usecNow ) );
+	// Save time when we sent the last sequenced packet.
+	const SteamNetworkingMicroseconds usecTimeSentLastSeq = m_connection.m_statsEndToEnd.m_usecTimeLastSentSeq;
 
-	byte *p = (byte*)( hdr + 1 );
+	uint8 pkt[ k_cbSteamNetworkingSocketsMaxUDPMsgLen ];
+	iovec gather[2];
+	gather[0].iov_base = pkt;
+	DataPacketSerializer<UDPDataMsgHdr> out( gather, pChunk, cbChunk );
+	out.hdr.m_unMsgFlags = 0x80;
+	Assert( m_connection.m_unConnectionIDRemote != 0 );
+	out.hdr.m_unToConnectionID = LittleDWord( m_connection.m_unConnectionIDRemote );
+	out.hdr.m_unSeqNum = LittleWord( m_connection.m_statsEndToEnd.ConsumeSendPacketNumberAndGetWireFmt( ctx.m_usecNow ) );
 
 	// Check how much bigger we could grow the header
 	// and still fit in a packet
-	int cbHdrOutSpaceRemaining = pkt + sizeof(pkt) - p - cbChunk;
-	if ( cbHdrOutSpaceRemaining < 0 )
+	if ( out.HdrBytesRemaining() < 0 )
 	{
 		AssertMsg( false, "MTU / header size problem!" );
 		return 0;
 	}
 
 	// Try to trim stuff from blob, if it won't fit
-	ctx.Trim( cbHdrOutSpaceRemaining );
+	ctx.Trim( out.HdrBytesRemaining() );
 
-	if ( ctx.Serialize( p ) )
+	if ( ctx.Serialize( out.m_pOut ) )
 	{
 		// Update bookkeeping with the stuff we are actually sending
 		TrackSentStats( ctx );
 
 		// Mark header with the flag
-		hdr->m_unMsgFlags |= hdr->kFlag_ProtobufBlob;
+		out.hdr.m_unMsgFlags |= out.hdr.kFlag_ProtobufBlob;
 	}
 
-	// !FIXME! Time since previous, for jitter measurement?
+	// Send packet spacing value, for jitter analysis?
+	if ( m_connection.m_connectionConfig.SendTimeSincePreviousPacket.Get() > 0 ) // -1 for plain UDP connections is "no"
+	{
+		if ( out.HdrBytesRemaining() >= sizeof(unsigned short) && usecTimeSentLastSeq != 0 && m_connection.m_statsEndToEnd.m_nPeerProtocolVersion >= 12 )
+		{
+			// Calculate spacing value, make sure it's reasonable.
+			uint64 usecTimeSinceSentLast = ctx.m_usecNow - usecTimeSentLastSeq;
+			Assert( (int64)usecTimeSinceSentLast >= 0 );
+			if ( usecTimeSinceSentLast <= (uint64)k_usecTimeSinceLastPacketMaxReasonable ) // Force unsigned comparison in case assert above fails
+			{
+				// Serialize it
+				out.PutUint16( LittleWord( usecTimeSinceSentLast >> k_usecTimeSinceLastPacketSerializedPrecisionShift ) );
+				out.hdr.m_unMsgFlags |= out.hdr.kFlag_TimeSincePrev;
+			}
+		}
+	}
 
-	// Use gather-based send.  This saves one memcpy of every payload
-	iovec gather[2];
-	gather[0].iov_base = pkt;
-	gather[0].iov_len = p - pkt;
-	gather[1].iov_base = const_cast<void*>( pChunk );
-	gather[1].iov_len = cbChunk;
-
-	int cbSend = gather[0].iov_len + gather[1].iov_len;
+	int cbSend = out.Finish();
 	Assert( cbSend <= sizeof(pkt) ); // Bug in the code above.  We should never "overflow" the packet.  (Ignoring the fact that we using a gather-based send.  The data could be tiny with a large header for piggy-backed stats.)
 
 	// !FIXME! Should we track data payload separately?  Maybe we ought to track
@@ -736,6 +763,20 @@ void CConnectionTransportUDPBase::Received_Data( const uint8 *pPkt, int cbPkt, S
 		pIn += cbStatsMsgIn;
 	}
 
+	// Time between the last sequenced packet?
+	int usecTimeSinceLast = -1;
+	if ( hdr->m_unMsgFlags & hdr->kFlag_TimeSincePrev )
+	{
+		if ( pIn + sizeof(unsigned short) > pPktEnd )
+		{
+			ReportBadUDPPacketFromConnectionPeer( "DataPacket", "Flags indicate presence of TimeSincePrev, but no room for it.  Stats message size %d, packet size %d", cbStatsMsgIn, cbPkt );
+			return;
+		}
+
+		usecTimeSinceLast = (int)LittleWord( *(unsigned short*)pIn ) << k_usecTimeSinceLastPacketSerializedPrecisionShift;
+		pIn += sizeof(unsigned short);
+	}
+
 	const void *pChunk = pIn;
 	int cbChunk = pPktEnd - pIn;
 
@@ -751,7 +792,6 @@ void CConnectionTransportUDPBase::Received_Data( const uint8 *pPkt, int cbPkt, S
 	RecvValidUDPDataPacket( ctx );
 
 	// Process plaintext
-	int usecTimeSinceLast = 0; // FIXME - should we plumb this through so we can measure jitter?
 	if ( !m_connection.ProcessPlainTextDataChunk( usecTimeSinceLast, ctx ) )
 		return;
 
@@ -1121,6 +1161,32 @@ bool CConnectionTransportUDP::CreateLoopbackPair( CConnectionTransportUDP *pTran
 	return true;
 }
 
+bool CSteamNetworkConnectionUDP::BSetLocalIdentityAndCheckForAuthOverride( bool bIsLocalHost, int nOptions, const SteamNetworkingConfigValue_t *pOptions, SteamDatagramErrMsg &errMsg )
+{
+
+	// Specific identity already set?
+	if ( !m_identityLocal.IsInvalid() )
+		return true;
+
+	// Use identity from the interface, if we have one
+	m_identityLocal = m_pSteamNetworkingSocketsInterface->InternalGetIdentity();
+	if ( !m_identityLocal.IsInvalid() )
+		return true;
+
+	// FIXME check passed-in options, in case there is an override
+
+	// We don't know who we are.  Should we attempt anonymous?
+	if ( GetIPAllowWithoutAuth( m_connectionConfig, bIsLocalHost ) == 0 )
+	{
+		V_strcpy_safe( errMsg, "Unable to determine local identity, and auth required.  Not logged in?" );
+		return false;
+	}
+
+	// Use anonymous
+	m_identityLocal.SetLocalHost();
+	return true;
+}
+
 bool CSteamNetworkConnectionUDP::BInitConnect( const SteamNetworkingIPAddr &addressRemote, int nOptions, const SteamNetworkingConfigValue_t *pOptions, SteamDatagramErrMsg &errMsg )
 {
 	AssertMsg( !m_pTransport, "Trying to connect when we already have a socket?" );
@@ -1137,25 +1203,10 @@ bool CSteamNetworkConnectionUDP::BInitConnect( const SteamNetworkingIPAddr &addr
 	Assert( m_identityRemote.IsInvalid() );
 	m_identityRemote.Clear();
 
-	// We should know our own identity, unless the app has said it's OK to go without this.
-	if ( m_identityLocal.IsInvalid() ) // Specific identity hasn't already been set (by derived class, etc)
-	{
-
-		// Use identity from the interface, if we have one
-		m_identityLocal = m_pSteamNetworkingSocketsInterface->InternalGetIdentity();
-		if ( m_identityLocal.IsInvalid())
-		{
-
-			// We don't know who we are.  Should we attempt anonymous?
-			if ( m_connectionConfig.IP_AllowWithoutAuth.Get() == 0 )
-			{
-				V_strcpy_safe( errMsg, "Unable to determine local identity, and auth required.  Not logged in?" );
-				return false;
-			}
-
-			m_identityLocal.SetLocalHost();
-		}
-	}
+	// Try to set our identity.  The base class will do it, but it doesn't know
+	// about the convars that can be used to disable auth for IP connections
+	if ( !BSetLocalIdentityAndCheckForAuthOverride( addressRemote.IsLocalHost(), nOptions, pOptions, errMsg ) )
+		return false;
 
 	// Create transport.
 	CConnectionTransportUDP *pTransport = new CConnectionTransportUDP( *this );
@@ -1238,6 +1289,11 @@ bool CSteamNetworkConnectionUDP::BBeginAccept(
 
 	m_unConnectionIDRemote = unConnectionIDRemote;
 	if ( !pParent->BAddChildConnection( this, errMsg ) )
+		return false;
+
+	// Try to set our identity.  The base class will do it, but it doesn't know
+	// about the convars that can be used to disable auth for IP connections
+	if ( !BSetLocalIdentityAndCheckForAuthOverride( adrFrom.IsLoopback(), 0, nullptr, errMsg ) )
 		return false;
 
 	// Let base class do some common initialization
@@ -1561,7 +1617,7 @@ void CConnectionTransportUDP::Received_ConnectOK( const CMsgSteamSockets_UDP_Con
 
 		if ( identityRemote.IsLocalHost() )
 		{
-			if ( m_connection.m_connectionConfig.IP_AllowWithoutAuth.Get() == 0 )
+			if ( GetIPAllowWithoutAuth( m_connection.m_connectionConfig, addr.IsLocalHost() ) == 0 )
 			{
 				// Should we send an explicit rejection here?
 				ReportBadUDPPacketFromConnectionPeer( "ConnectOK", "Unauthenticated connections not allowed." );
@@ -1767,15 +1823,9 @@ void CConnectionTransportUDP::SendConnectOK( SteamNetworkingMicroseconds usecNow
 
 EUnsignedCert CSteamNetworkConnectionUDP::AllowRemoteUnsignedCert()
 {
-	// NOTE: No special override for localhost.
-	// Should we add a separate convar for this?
-	// For the CSteamNetworkConnectionlocalhostLoopback connection,
-	// we know both ends are us.  but if they are just connecting to
-	// 127.0.0.1, it's not clear that we should handle this any
-	// differently from any other connection
-
 	// Enabled by convar?
-	int nAllow = m_connectionConfig.IP_AllowWithoutAuth.Get();
+	const bool bIsPeerLocalHost = ( Transport() && Transport()->m_pSocket && Transport()->m_pSocket->GetRemoteHostAddr().IsLoopback() );
+	const int nAllow = GetIPAllowWithoutAuth( m_connectionConfig, bIsPeerLocalHost );
 	if ( nAllow > 1 )
 		return k_EUnsignedCert_Allow;
 	if ( nAllow == 1 )

@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include "../../system/Colori.hpp"
+#include "raylib-cpp.hpp"
 
 namespace ggj
 {
@@ -20,6 +21,7 @@ namespace ggj
 
             virtual void clearText() = 0;
             virtual void setText(uint16_t line, const std::string &text, const ggj::Colori &color = {255, 255, 255, 255}) = 0;
+            virtual void setFont(Font* font) = 0;
             virtual bool initialize() = 0;
             virtual void update(float timeDelta) = 0;
             virtual void draw() = 0;

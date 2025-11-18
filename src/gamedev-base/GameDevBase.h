@@ -24,6 +24,8 @@
 #include "interfaces/system/IWorld.h"
 
 #include "interfaces/network/IIpAddressResolver.h"
+#include "interfaces/network/IServer.h"
+#include "interfaces/network/IClient.h"
 
 //System
 #include "system/Colori.hpp"
@@ -35,5 +37,7 @@
 
 //Network
 #include "network/IpAddressResolver.h"
+#include "network/Client.hpp"
+#include "network/Server.hpp"
 
 #endif //GAME_DEV_TEMPLATE_GAMEDEVBASE_H

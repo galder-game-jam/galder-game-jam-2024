@@ -358,17 +358,13 @@ const unsigned k_usecTimeSinceLastPacketSerializedPrecisionShift = 4;
 const SteamNetworkingMicroseconds k_usecTimeSinceLastPacketMaxReasonable = k_nMillion/4;
 COMPILE_TIME_ASSERT( ( k_usecTimeSinceLastPacketMaxReasonable >> k_usecTimeSinceLastPacketSerializedPrecisionShift ) < 0x8000 ); // make sure all "reasonable" values can get serialized into 16-bits
 
-///	Don't send spacing values when packets are sent extremely close together.  The spacing
-/// should be a bit higher that our serialization precision.
-const SteamNetworkingMicroseconds k_usecTimeSinceLastPacketMinReasonable = 2 << k_usecTimeSinceLastPacketSerializedPrecisionShift;
-
 /// A really terrible ping score, but one that we can do some math with without overflowing
 constexpr int k_nRouteScoreHuge = INT_MAX/8;
 
 /// Protocol version of this code.  This is a blunt instrument, which is incremented when we
 /// wish to change the wire protocol in a way that doesn't have some other easy
 /// mechanism for dealing with compatibility (e.g. using protobuf's robust mechanisms).
-const uint32 k_nCurrentProtocolVersion = 11;
+const uint32 k_nCurrentProtocolVersion = 12;
 
 /// Minimum required version we will accept from a peer.  We increment this
 /// when we introduce wire breaking protocol changes and do not wish to be
@@ -867,10 +863,12 @@ struct ConnectionConfig
 	ConfigValue<int32> MTU_PacketSize;
 	ConfigValue<int32> NagleTime;
 	ConfigValue<int32> IP_AllowWithoutAuth;
+	ConfigValue<int32> IPLocalHost_AllowWithoutAuth;
 	ConfigValue<int32> Unencrypted;
 	ConfigValue<int32> SymmetricConnect;
 	ConfigValue<int32> LocalVirtualPort;
 	ConfigValue<int64> ConnectionUserData;
+	ConfigValue<int32> SendTimeSincePreviousPacket;
 
 	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_DIAGNOSTICSUI
 	ConfigValue<int32> EnableDiagnosticsUI;
@@ -899,7 +897,7 @@ struct ConnectionConfig
 	#endif
 
 	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_SDR
-		ConfigValue<std::string> SDRClient_DebugTicketAddress;
+		ConfigValue<std::string> SDRClient_DevTicket;
 		ConfigValue<int32> P2P_Transport_SDR_Penalty;
 	#endif
 
@@ -926,12 +924,20 @@ namespace GlobalConfig
 	extern GlobalConfigValue<int32> FakePacketReorder_Time;
 	extern GlobalConfigValue<float> FakePacketDup_Send;
 	extern GlobalConfigValue<float> FakePacketDup_Recv;
+	extern GlobalConfigValue<float> FakePacketJitter_Send_Avg;
+	extern GlobalConfigValue<float> FakePacketJitter_Send_Max;
+	extern GlobalConfigValue<float> FakePacketJitter_Send_Pct;
+	extern GlobalConfigValue<float> FakePacketJitter_Recv_Avg;
+	extern GlobalConfigValue<float> FakePacketJitter_Recv_Max;
+	extern GlobalConfigValue<float> FakePacketJitter_Recv_Pct;
+
 	extern GlobalConfigValue<int32> FakePacketDup_TimeMax;
 	extern GlobalConfigValue<int32> PacketTraceMaxBytes;
 	extern GlobalConfigValue<int32> FakeRateLimit_Send_Rate;
 	extern GlobalConfigValue<int32> FakeRateLimit_Send_Burst;
 	extern GlobalConfigValue<int32> FakeRateLimit_Recv_Rate;
 	extern GlobalConfigValue<int32> FakeRateLimit_Recv_Burst;
+	extern GlobalConfigValue<int32> OutOfOrderCorrectionWindowMicroseconds;
 	extern GlobalConfigValue<int32> ECN;
 
 	extern GlobalConfigValue<int32> EnumerateDevVars;
@@ -939,21 +945,11 @@ namespace GlobalConfig
 
 	extern ConnectionConfigDefaultValue<int32> LogLevel_PacketGaps;
 	extern ConnectionConfigDefaultValue<int32> LogLevel_P2PRendezvous;
+	extern ConnectionConfigDefaultValue<int32> SendTimeSincePreviousPacket;
 
 	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_STEAMNETWORKINGMESSAGES
 	extern GlobalConfigValue<void*> Callback_MessagesSessionRequest;
 	extern GlobalConfigValue<void*> Callback_MessagesSessionFailed;
-	#endif
-
-	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_SDR
-	extern GlobalConfigValue<int32> SDRClient_ConsecutitivePingTimeoutsFailInitial;
-	extern GlobalConfigValue<int32> SDRClient_ConsecutitivePingTimeoutsFail;
-	extern GlobalConfigValue<int32> SDRClient_MinPingsBeforePingAccurate;
-	extern GlobalConfigValue<int32> SDRClient_SingleSocket;
-	extern GlobalConfigValue<int32> LogLevel_SDRRelayPings;
-	extern GlobalConfigValue<std::string> SDRClient_ForceRelayCluster;
-	extern GlobalConfigValue<std::string> SDRClient_ForceProxyAddr;
-	extern GlobalConfigValue<std::string> SDRClient_FakeClusterPing;
 	#endif
 
 	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_DIAGNOSTICSUI
@@ -1008,10 +1004,6 @@ class CPossibleOutOfOrderPacket
 {
 public:
 
-	// "Timeout" when this packet should be dispatched if we haven't
-	// received the skipped packet
-	SteamNetworkingMicroseconds m_usecFlush = 0;
-
 	// Detach from our owner and destroy this object.
 	void Destroy();
 
@@ -1033,6 +1025,110 @@ protected:
 	// Destructor is protected, you should call Destroy()
 	virtual ~CPossibleOutOfOrderPacket();
 };
+
+// Helper used to serialize data packets with a header and optional inline stats blob
+struct DataPacketSerializerBase
+{
+	int HdrBytesRemaining() const { return int( m_pMaxOut - m_pOut ); }
+
+	inline void PutUint16( uint16 x )
+	{
+		*(uint16*)m_pOut = x;
+		m_pOut += sizeof(uint16);
+		Assert( m_pOut <= m_pMaxOut );
+	}
+
+	uint8 *m_pOut;
+	uint8 *m_pMaxOut;
+};
+
+// Data packet serializer used in client code, where we use iovec
+// so that we let th OS gather the header and the payload in
+// a single system call
+template <typename THdr >
+struct DataPacketSerializer : DataPacketSerializerBase
+{
+	DataPacketSerializer( iovec *pOvecOut, const void *pPayloadIn, int cbPayload )
+	: m_iov_out( pOvecOut )
+	, hdr( *(THdr *)( pOvecOut[0].iov_base ) )
+	{
+
+		// Make sure we have room for our header, and some occasional inline stats, and the max payload
+		COMPILE_TIME_ASSERT( sizeof(THdr) + k_cbSteamNetworkingSocketsMaxEncryptedPayloadSend + 32 <= k_cbSteamNetworkingSocketsMaxUDPMsgLen );
+
+		// Set payload
+		m_iov_out[1].iov_base = (void*)pPayloadIn;
+		m_iov_out[1].iov_len = cbPayload;
+
+		// Write pointer for data after header
+		m_pOut = (uint8*)( &hdr + 1 );
+
+		// Max place we could advance this cursor, and still fit in the payload
+		m_pMaxOut = m_pOut + ( k_cbSteamNetworkingSocketsMaxUDPMsgLen - sizeof(THdr) - cbPayload );
+		Assert( m_pMaxOut >= m_pOut );
+	}
+
+	int Finish()
+	{
+		Assert( m_pOut <= m_pMaxOut );
+
+		// Set header size
+		m_iov_out[0].iov_len = m_pOut - (uint8*)m_iov_out[0].iov_base;
+
+		return int( m_iov_out[0].iov_len + m_iov_out[1].iov_len );
+	}
+
+	THdr &hdr;
+	iovec *m_iov_out;
+};
+
+// Helpers for manipulating the Type-of-Service (TOS) field in the IPv4 header.
+// https://en.wikipedia.org/wiki/Type_of_service
+constexpr uint8 IPv4_TOS_DSCP_bits = 0xfc;
+constexpr uint8 IPv4_TOS_ECN_bits = 0x3;
+inline uint8 IPv4_TOS_make( uint8 dscp, uint8 ecn )
+{
+	Assert( dscp < 0x40 );
+	Assert( ecn < 0x4 );
+	return ( (dscp<<2U) | ecn );
+}
+
+// Extract ECN from TOS
+inline uint8 IPv4_TOS_ECN( uint8 tos )
+{
+	return tos & IPv4_TOS_ECN_bits;
+}
+
+// Extract DSCP from TOS
+inline uint8 IPv4_TOS_DSCP( uint8 tos )
+{
+	return tos>>2U;
+}
+
+// FIXME POSIX supports this!  Need to check console support and implement all supported platforms,
+// and then move this to platform_sockets
+#ifdef _WIN32
+	#define PlatformCanSendECN() true
+#else
+	#define PlatformCanSendECN() false
+#endif
+
+#if PlatformCanSendECN()
+	// ECN value to send, if "auto" option is specified.
+	// -1 means that we have not completed detection, and so 0 will be used
+	extern int g_nSendECNAuto;
+
+	// Get the ECN value we will actually use for sending
+	inline uint8 ResolveECNSendGlobal()
+	{
+		int ecn = GlobalConfig::ECN.Get();
+		if ( ecn < 0 )
+			ecn = std::max( 0, g_nSendECNAuto );
+		return (uint8)ecn;
+	}
+#else
+	inline uint8 ResolveECNSendGlobal() { return 0; }
+#endif
 
 } // namespace SteamNetworkingSocketsLib
 

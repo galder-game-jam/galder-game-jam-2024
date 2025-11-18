@@ -255,10 +255,11 @@ void CSteamNetworkConnectionP2P::CheckInitICE()
 		#else
 			ICE_Implementation = 1;
 		#endif
+
+		m_connectionConfig.P2P_Transport_ICE_Implementation.Set( ICE_Implementation );
 	}
 
 	// Lock it in
-	m_connectionConfig.P2P_Transport_ICE_Implementation.Set( ICE_Implementation );
 	m_connectionConfig.P2P_Transport_ICE_Implementation.Lock();
 
 	// "Native" ICE client?
@@ -747,8 +748,15 @@ void CConnectionTransportP2PICE::P2PTransportUpdateRouteMetrics( SteamNetworking
 
 void CConnectionTransportP2PICE::ProcessPacket( const uint8_t *pPkt, int cbPkt, SteamNetworkingMicroseconds usecNow )
 {
-	Assert( cbPkt >= 1 ); // Caller should have checked this
-	ETW_ICEProcessPacket( m_connection.m_hConnectionSelf, cbPkt );
+	// Check for bad packet.  I think the minimum required size is
+	// actually larger.  But each of the paths below will handle it
+	// and provide a more specific error.
+	if ( cbPkt < 1 )
+	{
+		ReportBadUDPPacketFromConnectionPeer( "packet", "Packet is too small" );
+		return;
+	}
+	//ETW_ICEProcessPacket( m_connection.m_hConnectionSelf, cbPkt );
 
 	// Data packet is the most common, check for it first.  Also, does stat tracking.
 	if ( *pPkt & 0x80 )

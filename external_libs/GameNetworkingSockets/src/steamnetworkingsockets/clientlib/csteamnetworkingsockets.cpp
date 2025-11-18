@@ -55,6 +55,13 @@ DEFINE_GLOBAL_CONFIGVAL( int32, FakeRateLimit_Send_Rate, 0, 0, 1024*1024*1024 );
 DEFINE_GLOBAL_CONFIGVAL( int32, FakeRateLimit_Send_Burst, 16*1024, 0, 1024*1024 );
 DEFINE_GLOBAL_CONFIGVAL( int32, FakeRateLimit_Recv_Rate, 0, 0, 1024*1024*1024 );
 DEFINE_GLOBAL_CONFIGVAL( int32, FakeRateLimit_Recv_Burst, 16*1024, 0, 1024*1024 );
+DEFINE_GLOBAL_CONFIGVAL( int32, OutOfOrderCorrectionWindowMicroseconds, 1000, 0, 50*1000 );
+DEFINE_GLOBAL_CONFIGVAL( float, FakePacketJitter_Send_Avg, 0.0f, 0.0f, 2000.0f );
+DEFINE_GLOBAL_CONFIGVAL( float, FakePacketJitter_Send_Max, 100.0f, 0.0f, 5000.0f );
+DEFINE_GLOBAL_CONFIGVAL( float, FakePacketJitter_Send_Pct, 75.0f, 0.0f, 100.0f );
+DEFINE_GLOBAL_CONFIGVAL( float, FakePacketJitter_Recv_Avg, 0.0f, 0.0f, 2000.0f );
+DEFINE_GLOBAL_CONFIGVAL( float, FakePacketJitter_Recv_Max, 100.0f, 0.0f, 5000.0f );
+DEFINE_GLOBAL_CONFIGVAL( float, FakePacketJitter_Recv_Pct, 75.0f, 0.0f, 100.0f );
 
 DEFINE_GLOBAL_CONFIGVAL( void *, Callback_AuthStatusChanged, nullptr );
 #ifdef STEAMNETWORKINGSOCKETS_ENABLE_STEAMNETWORKINGMESSAGES
@@ -85,6 +92,7 @@ DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, MTU_PacketSize, 1300, k_cbSteamNetwor
 #else
 	DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, IP_AllowWithoutAuth, 0, 0, 2 );
 #endif
+DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, IPLocalHost_AllowWithoutAuth, 0, 0, 2 );
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, Unencrypted, 0, 0, 3 );
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, SymmetricConnect, 0, 0, 1 );
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, LocalVirtualPort, -1, -1, INT32_MAX );
@@ -97,6 +105,7 @@ DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, LogLevel_Message, k_ESteamNetworkingS
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, LogLevel_PacketGaps, k_ESteamNetworkingSocketsDebugOutputType_Warning, k_ESteamNetworkingSocketsDebugOutputType_Error, k_ESteamNetworkingSocketsDebugOutputType_Everything );
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, LogLevel_P2PRendezvous, k_ESteamNetworkingSocketsDebugOutputType_Warning, k_ESteamNetworkingSocketsDebugOutputType_Error, k_ESteamNetworkingSocketsDebugOutputType_Everything );
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( void *, Callback_ConnectionStatusChanged, nullptr );
+DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, SendTimeSincePreviousPacket, -1, -1, 1 );
 
 #ifdef STEAMNETWORKINGSOCKETS_ENABLE_DIAGNOSTICSUI
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, EnableDiagnosticsUI, 1, 0, 1 );
@@ -122,12 +131,12 @@ DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, P2P_Transport_ICE_Penalty, 0, 0, INT_
 #endif
 
 #ifdef STEAMNETWORKINGSOCKETS_ENABLE_SDR
-DEFINE_CONNECTON_DEFAULT_CONFIGVAL( std::string, SDRClient_DebugTicketAddress, "" );
+DEFINE_CONNECTON_DEFAULT_CONFIGVAL( std::string, SDRClient_DevTicket, "" );
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, P2P_Transport_SDR_Penalty, 0, 0, INT_MAX );
 #endif
 
-#ifdef _WIN32
-DEFINE_GLOBAL_CONFIGVAL( int32, ECN, -1, -1, 3 );
+#if PlatformCanSendECN()
+DEFINE_GLOBAL_CONFIGVAL( int32, ECN, -1, -1, 2 );
 #endif
 
 static GlobalConfigValueEntry *s_pFirstGlobalConfigEntry = nullptr;
@@ -180,7 +189,7 @@ static void EnsureConfigValueTableInitted()
 	for ( int i = 1 ; i < N ; ++i )
 	{
 		s_vecConfigValueTable[i-1]->m_pNextEntry = s_vecConfigValueTable[i];
-		AssertMsg1( s_vecConfigValueTable[i-1]->m_eValue < s_vecConfigValueTable[i]->m_eValue, "Registered duplicate config value %d", s_vecConfigValueTable[i]->m_eValue );
+		AssertFatalMsg( s_vecConfigValueTable[i-1]->m_eValue < s_vecConfigValueTable[i]->m_eValue, "Registered duplicate config value %d", s_vecConfigValueTable[i]->m_eValue );
 	}
 	s_vecConfigValueTable[N-1]->m_pNextEntry = nullptr;
 
@@ -425,7 +434,7 @@ CSteamNetworkingSockets::CSteamNetworkingSockets( CSteamNetworkingUtils *pSteamN
 #endif
 , m_bEverTriedToGetCert( false )
 , m_bEverGotCert( false )
-, m_mutexPendingCallbacks( "pending_callbacks" )
+, m_mutexPendingCallbacks( "pending_callbacks", LockDebugInfo::k_nOrder_Max ) // Never take another lock while holding this
 {
 	m_connectionConfig.Init( nullptr );
 	InternalClearIdentity();

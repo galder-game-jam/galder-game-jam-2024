@@ -23,6 +23,10 @@
 	#include <steam/steamnetworkingfakeip.h>
 #endif
 
+#include <tier0/valve_tracelogging.h> // Includes windows.h :(  Include this last before memdbgon
+
+TRACELOGGING_DECLARE_PROVIDER( HTraceLogging_SteamNetworkingSockets );
+
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
@@ -160,7 +164,7 @@ void CSteamNetworkingMessage::Unlink()
 	UnlinkFromQueue( &CSteamNetworkingMessage::m_linksSecondaryQueue );
 }
 
-ShortDurationLock g_lockAllRecvMessageQueues( "all_recv_msg_queue" );
+ShortDurationLock g_lockAllRecvMessageQueues( "all_recv_msg_queue", LockDebugInfo::k_nOrder_Max ); // Never take another lock while holding this
 
 void SteamNetworkingMessageQueue::AssertLockHeld() const
 {
@@ -634,7 +638,7 @@ CSteamNetworkConnectionBase::~CSteamNetworkConnectionBase()
 }
 
 static std::vector<CSteamNetworkConnectionBase *> s_vecPendingDeleteConnections;
-static ShortDurationLock s_lockPendingDeleteConnections( "connection_delete_queue" );
+static ShortDurationLock s_lockPendingDeleteConnections( "connection_delete_queue", LockDebugInfo::k_nOrder_Max ); // Never take another lock while holding this
 
 void CSteamNetworkConnectionBase::ConnectionQueueDestroy()
 {
@@ -1642,7 +1646,7 @@ ESteamNetConnectionEnd CSteamNetworkConnectionBase::FinishCryptoHandshake( bool 
 		return k_ESteamNetConnectionEnd_Remote_BadCrypt;
 	}
 
-	// Diffie–Hellman key exchange to get "premaster secret"
+	// Diffie-Hellman key exchange to get "premaster secret"
 	AutoWipeFixedSizeBuffer<sizeof(SHA256Digest_t)> premasterSecret;
 	if ( !CCrypto::PerformKeyExchange( m_keyExchangePrivateKeyLocal, keyExchangePublicKeyRemote, &premasterSecret.m_buf ) )
 	{
@@ -2492,10 +2496,11 @@ void CSteamNetworkConnectionBase::SetState( ESteamNetworkingConnectionState eNew
 	{
 		// Can't change certain options after this point
 		m_connectionConfig.IP_AllowWithoutAuth.Lock();
+		m_connectionConfig.IPLocalHost_AllowWithoutAuth.Lock();
 		m_connectionConfig.Unencrypted.Lock();
 		m_connectionConfig.SymmetricConnect.Lock();
 		#ifdef STEAMNETWORKINGSOCKETS_ENABLE_SDR
-			m_connectionConfig.SDRClient_DebugTicketAddress.Lock();
+			m_connectionConfig.SDRClient_DevTicket.Lock();
 		#endif
 		#ifdef STEAMNETWORKINGSOCKETS_ENABLE_ICE
 			m_connectionConfig.P2P_Transport_ICE_Enable.Lock();
@@ -2700,6 +2705,17 @@ bool CSteamNetworkConnectionBase::ReceivedMessage( CSteamNetworkingMessage *pMsg
 	pMsg->m_conn = m_hConnectionSelf;
 	pMsg->m_nConnUserData = GetUserData();
 
+	// Emit ETW event
+	TraceLoggingWrite(
+		HTraceLogging_SteamNetworkingSockets,
+		"MsgRecv",
+		TraceLoggingString( GetDescription(), "Connection" ),
+		TraceLoggingInt64( pMsg->m_nMessageNumber, "MsgNum" ),
+		TraceLoggingUInt16( pMsg->m_idxLane, "Lane" ),
+		TraceLoggingBool( ( pMsg->m_nFlags & k_nSteamNetworkingSend_Reliable ) != 0, "Reliable" ),
+		TraceLoggingUInt32( pMsg->m_cbSize, "Size" )
+	);
+
 	// We use the same lock to protect *all* recv queues, for both connections and poll groups,
 	// which keeps this really simple.
 	g_lockAllRecvMessageQueues.lock();
@@ -2786,7 +2802,7 @@ bool CSteamNetworkConnectionBase::ReceivedMessage( CSteamNetworkingMessage *pMsg
 
 		// Add to the poll group, if we are in one
 		if ( m_pPollGroup )
-			pMsg->LinkToQueueTail( &CSteamNetworkingMessage::m_linksSecondaryQueue, &m_pPollGroup->m_queueRecvMessages );\
+			pMsg->LinkToQueueTail( &CSteamNetworkingMessage::m_linksSecondaryQueue, &m_pPollGroup->m_queueRecvMessages );
 
 		// Each if() branch has its own unlock, so we can spew in the branch above
 		g_lockAllRecvMessageQueues.unlock();
@@ -3710,7 +3726,8 @@ void CConnectionTransport::TransportGuessTimeoutReason( ESteamNetConnectionEnd &
 
 void CSteamNetworkConnectionBase::UpdateSpeeds( int nTXSpeed, int nRXSpeed )
 {
-	m_statsEndToEnd.UpdateSpeeds( nTXSpeed, nRXSpeed );
+	// FIXME
+	//m_statsEndToEnd.UpdateSpeeds( nTXSpeed, nRXSpeed );
 }
 
 void CSteamNetworkConnectionBase::UpdateMTUFromConfig( bool bForceRecalc )

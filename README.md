@@ -93,3 +93,16 @@ The following graphics from [OpenGameArt](https://opengameart.org) are used in t
 | tiny-swords(folder)             | Pixel Frog      | Public Domain           | https://pixelfrog-assets.itch.io/tiny-swords                         |
 | mystic-woods-free(folder)       | Endavor         | Free for non-commercial | https://game-endeavor.itch.io/mystic-woods                           |
 | whispers-of-avalon(folder)      | Leonard Pabin   | CC-BY 3.0/GPL3.0/GPL2.0 | https://opengameart.org/content/whispers-of-avalon-grassland-tileset |
+
+## Potential 2024 assets
+
+| Name                       | Creator       | License                 | URL                                                                  |
+|----------------------------|---------------|-------------------------|----------------------------------------------------------------------|
+| pixel-crawler-free(folder) | Anokolisa     | ?                       | https://anokolisa.itch.io/dungeon-crawler-pixel-art-asset-pack       |
+| tiny-swords(folder)        | Pixel Frog    | Public Domain           | https://pixelfrog-assets.itch.io/tiny-swords                         |
+| mystic-woods-free(folder)  | Endavor       | Free for non-commercial | https://game-endeavor.itch.io/mystic-woods                           |
+| whispers-of-avalon(folder) | Leonard Pabin | CC-BY 3.0/GPL3.0/GPL2.0 | https://opengameart.org/content/whispers-of-avalon-grassland-tileset |
+
+# Networking
+
+**IMPORTANT: Build `GameNetowrkingSockets` and `GameNetworkingSockets_s` individually first. Temporary solution, but for now this is what works.**

@@ -23,7 +23,7 @@ namespace SteamNetworkingSocketsLib {
 CConnectionTransportP2PICE_WebRTC::CConnectionTransportP2PICE_WebRTC( CSteamNetworkConnectionP2P &connection )
 : CConnectionTransportP2PICE( connection )
 , m_pICESession( nullptr )
-, m_mutexPacketQueue( "ice_packet_queue" )
+, m_mutexPacketQueue( "ice_packet_queue", LockDebugInfo::k_nOrder_Max ) // never take another lock while holding this
 {
 }
 
@@ -62,12 +62,6 @@ void CConnectionTransportP2PICE_WebRTC::Init( const ICESessionConfig &cfg )
 		Connection().ICEFailed( k_ESteamNetConnectionEnd_Misc_InternalError, "CreateICESession failed" );
 		return;
 	}
-
-	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_ETW
-		m_pICESession->SetWriteEvent_setsockopt( ETW_webrtc_setsockopt );
-		m_pICESession->SetWriteEvent_send( ETW_webrtc_send );
-		m_pICESession->SetWriteEvent_sendto( ETW_webrtc_sendto );
-	#endif
 }
 
 bool CConnectionTransportP2PICE_WebRTC::SendPacket( const void *pkt, int cbPkt )
@@ -75,7 +69,7 @@ bool CConnectionTransportP2PICE_WebRTC::SendPacket( const void *pkt, int cbPkt )
 	if ( !m_pICESession )
 		return false;
 
-	ETW_ICESendPacket( m_connection.m_hConnectionSelf, cbPkt );
+	//ETW_ICESendPacket( m_connection.m_hConnectionSelf, cbPkt );
 	if ( !m_pICESession->BSendData( pkt, cbPkt ) )
 		return false;
 
@@ -267,8 +261,8 @@ public:
 
 	inline void Queue( CConnectionTransportP2PICE_WebRTC *pTransport, const char *pszTag )
 	{
-		DbgVerify( Setup( pTransport ) ); // Caller should have already checked
-		QueueToRunWithGlobalLock( pszTag );
+		if ( Setup( pTransport ) )
+			QueueToRunWithGlobalLock( pszTag );
 	}
 
 	inline void RunOrQueue( CConnectionTransportP2PICE_WebRTC *pTransport, const char *pszTag )
@@ -350,7 +344,11 @@ void CConnectionTransportP2PICE_WebRTC::OnLocalCandidateGathered( EICECandidateT
 	RunIceCandidateAdded *pRun = new RunIceCandidateAdded;
 	pRun->eType = eType;
 	pRun->msgCandidate.set_candidate( pszCandidate );
-	pRun->RunOrQueue( this, "ICE OnIceCandidateAdded" );
+
+	// Always use the queue here.  Never run immediately, even if we
+	// can get the lock.  This is not time sensitive, and deadlocks
+	// are a possibility with this type of event.
+	pRun->Queue( this, "ICE OnIceCandidateAdded" );
 }
 
 void CConnectionTransportP2PICE_WebRTC::DrainPacketQueue( SteamNetworkingMicroseconds usecNow )
@@ -418,8 +416,11 @@ void CConnectionTransportP2PICE_WebRTC::OnWritableStateChanged()
 		}
 	};
 
+	// Always use the queue here.  Never run immediately, even if we
+	// can get the lock.  This is not time sensitive, and deadlocks
+	// are a possibility with this type of event.
 	RunWritableStateChanged *pRun = new RunWritableStateChanged;
-	pRun->RunOrQueue( this, "ICE OnWritableStateChanged" );
+	pRun->Queue( this, "ICE OnWritableStateChanged" );
 }
 
 void CConnectionTransportP2PICE_WebRTC::OnRouteChanged()
@@ -432,8 +433,11 @@ void CConnectionTransportP2PICE_WebRTC::OnRouteChanged()
 		}
 	};
 
+	// Always use the queue here.  Never run immediately, even if we
+	// can get the lock.  This is not time sensitive, and deadlocks
+	// are a possibility with this type of event.
 	RunRouteStateChanged *pRun = new RunRouteStateChanged;
-	pRun->RunOrQueue( this, "ICE OnRouteChanged" );
+	pRun->Queue( this, "ICE OnRouteChanged" );
 }
 
 void CConnectionTransportP2PICE_WebRTC::OnData( const void *pPkt, size_t nSize )

@@ -1,4 +1,18 @@
 //====== Copyright Valve Corporation, All rights reserved. ====================
+//
+// "Low level" stuff used by the SteamNetworkingSockets client library to
+// interface with the operating system.  Ideally, most OS-specific details are
+// handled in this file.
+//
+// - Dealing with OS sockets, sending/receiving of UDP packets
+// - Simulating network conditions such as fake lag/loss/reording/jitter
+// - Managing the main service thread, polling efficiently
+// - Dispatching received packets to the registered callbacks.
+// - Lock (mutex) details, especially hygiene enforcement and debugging
+// - Handling 'spew' (diagnostic messages, asserts, etc) from the library
+// - Queued task system
+// - Support for wifi adapters that can send on both bands simultaneously
+//
 #include <thread>
 #include <mutex>
 #include <atomic>
@@ -12,6 +26,7 @@
 #include <tier1/utlpriorityqueue.h>
 #include <tier1/utllinkedlist.h>
 #include "crypto.h"
+#include <tier0/valve_tracelogging.h>
 
 #if IsPosix()
 	#include <pthread.h>
@@ -45,7 +60,34 @@
 
 #include <tier0/memdbgon.h>
 
+TRACELOGGING_DECLARE_PROVIDER( HTraceLogging_SteamNetworkingSockets );
+
+TRACELOGGING_DEFINE_PROVIDER(
+	HTraceLogging_SteamNetworkingSockets,
+	"Valve.SteamNetworkingSockets",
+	/* OLD GUID:               ( 0xb77d8a36, 0xef0c, 0x4976, 0x8d, 0x22, 0x08, 0xf9, 0x86, 0xf5, 0x6c, 0xfb ) */
+	/* NEW hash-based guid: */ ( 0xd4e956eb, 0xde52, 0x57ac, 0xdc, 0xaa, 0x1f, 0x9b, 0xa1, 0x04, 0x17, 0xc8 )
+);
+
+#if IsTraceLoggingEnabled()
+// We'll put up to N of the first bytes in ETW events for the low level send/recv event
+constexpr int k_cbETWEventUDPPacketDataSize = 16;
+#endif
+
 namespace SteamNetworkingSocketsLib {
+
+inline void ETW_LongOp( const char *opName, SteamNetworkingMicroseconds usec, const char *pszInfo )
+{
+	if ( !pszInfo )
+		pszInfo = "";
+	TraceLoggingWrite(
+		HTraceLogging_SteamNetworkingSockets,
+		"LongOp",
+		TraceLoggingLevel( WINEVENT_LEVEL_WARNING ),
+		TraceLoggingUInt64( usec, "Microseconds" ),
+		TraceLoggingString( pszInfo, "ExtraInfo" )
+	);
+}
 
 constexpr int k_msMaxPollWait = 1000;
 constexpr SteamNetworkingMicroseconds k_usecMaxTimestampDelta = k_msMaxPollWait * 1100;
@@ -54,8 +96,12 @@ static void FlushSystemSpew();
 
 int g_cbUDPSocketBufferSize = 256*1024;
 
+#if PlatformCanSendECN()
+int g_nSendECNAuto = -1;
+#endif
+
 /// Global lock for all local data structures
-static Lock<RecursiveTimedMutexImpl> s_mutexGlobalLock( "global", 0 );
+static Lock<RecursiveTimedMutexImpl> s_mutexGlobalLock( "global", 0, LockDebugInfo::k_nOrder_Global );
 
 #if STEAMNETWORKINGSOCKETS_LOCK_DEBUG_LEVEL > 0
 
@@ -180,48 +226,72 @@ void LockDebugInfo::AboutToLock( bool bTry )
 	{
 		// Remember when we started trying to lock
 		t.m_usecOuterLockStartTime = SteamNetworkingSockets_GetLocalTimestamp();
+		return;
 	}
-	else
+
+	// We already hold a lock.  Check for taking locks in such a way
+	// that might lead to deadlocks.
+	const LockDebugInfo *pTopLock = t.m_arHeldLocks[ t.m_nHeldLocks-1 ];
+
+	// Taking locks in increasing order is always allowed
+	if ( likely( pTopLock->m_nOrder < m_nOrder ) )
+		return;
+
+	// Global lock *must* always be the outermost lock.  (It is legal to take other locks in
+	// between and then lock the global lock recursively.)
+	const bool bHoldGlobalLock = t.m_arHeldLocks[ 0 ] == &s_mutexGlobalLock;
+	AssertMsg(
+		bHoldGlobalLock || this != &s_mutexGlobalLock,
+		"Taking global lock while already holding lock '%s'", t.m_arHeldLocks[ 0 ]->m_pszName
+	);
+
+	// If they are only "trying", we allow out-of-order behaviour.
+	if ( bTry )
+		return;
+
+	// It's always OK to lock recursively.
+	//
+	// (Except for "short duration" locks, which are allowed to
+	// use a mutex implementation that does not support this.)
+	if ( !( m_nFlags & k_nFlag_ShortDuration ) )
 	{
-
-		// We already hold a lock.  Make sure it's legal for us to take another!
-
-		// Global lock *must* always be the outermost lock.  (It is legal to take other locks in
-		// between and then lock the global lock recursively.)
-		const bool bHoldGlobalLock = t.m_arHeldLocks[ 0 ] == &s_mutexGlobalLock;
-		AssertMsg(
-			bHoldGlobalLock || this != &s_mutexGlobalLock,
-			"Taking global lock while already holding lock '%s'", t.m_arHeldLocks[ 0 ]->m_pszName
-		);
-
-		// Check for taking locks in such a way that might lead to deadlocks.
-		// If they are only "trying", then we do allow out of order behaviour.
-		if ( !bTry )
+		for ( int i = 0 ; i < t.m_nHeldLocks ; ++i )
 		{
-			const LockDebugInfo *pTopLock = t.m_arHeldLocks[ t.m_nHeldLocks-1 ];
-
-			// Once we take a "short duration" lock, we must not
-			// take any additional locks!  (Including a recursive lock.)
-			AssertMsg( !( pTopLock->m_nFlags & LockDebugInfo::k_nFlag_ShortDuration ), "Taking lock '%s' while already holding lock '%s'", m_pszName, pTopLock->m_pszName );
-
-			// If the global lock isn't held, then no more than one
-			// object lock is allowed, since two different threads
-			// might take them in different order.
-			constexpr int k_nObjectFlags = LockDebugInfo::k_nFlag_Connection | LockDebugInfo::k_nFlag_PollGroup;
-			if (
-				( !bHoldGlobalLock && ( m_nFlags & k_nObjectFlags ) != 0 )
-				//|| ( m_nFlags & k_nFlag_Table ) // We actually do this in one place when we know it's OK.  Not wirth it right now to get this situation exempted from the checking.
-			) {
-				// We must not already hold any existing object locks (except perhaps this one)
-				for ( int i = 0 ; i < t.m_nHeldLocks ; ++i )
-				{
-					const LockDebugInfo *pOtherLock = t.m_arHeldLocks[ i ];
-					AssertMsg( pOtherLock == this || !( pOtherLock->m_nFlags & k_nObjectFlags ),
-						"Taking lock '%s' and then '%s', while not holding the global lock", pOtherLock->m_pszName, m_pszName );
-				}
-			}
+			if ( t.m_arHeldLocks[i] == this )
+				return;
 		}
 	}
+
+	// Taking multiple object locks?  This is allowed under certain circumstances
+	if ( likely( pTopLock->m_nOrder == m_nOrder && m_nOrder == k_nOrder_ObjectOrTable ) )
+	{
+
+		// If we hold the global lock, it's OK
+		if ( bHoldGlobalLock )
+			return;
+
+		// If the global lock isn't held, then no more than one
+		// object lock is allowed, since two different threads
+		// might take them in different order.
+		constexpr int k_nObjectFlags = LockDebugInfo::k_nFlag_Connection | LockDebugInfo::k_nFlag_PollGroup;
+		if (
+			( ( m_nFlags & k_nObjectFlags ) != 0 )
+			//|| ( m_nFlags & k_nFlag_Table ) // We actually do this in one place when we know it's OK.  Not worth it right now to get this situation exempted from the checking.
+		) {
+			// We must not already hold any existing object locks (except perhaps this one)
+			for ( int i = 0 ; i < t.m_nHeldLocks ; ++i )
+			{
+				const LockDebugInfo *pOtherLock = t.m_arHeldLocks[ i ];
+				AssertMsg( pOtherLock == this || !( pOtherLock->m_nFlags & k_nObjectFlags ),
+					"Taking lock '%s' and then '%s', while not holding the global lock", pOtherLock->m_pszName, m_pszName );
+			}
+		}
+
+		// Usage is OK if we didn't find any problems above
+		return;
+	}
+
+	AssertMsg( false, "Taking lock '%s' while already holding lock '%s'", m_pszName, pTopLock->m_pszName );
 }
 
 void LockDebugInfo::OnLocked( const char *pszTag )
@@ -429,7 +499,7 @@ static volatile bool s_bManualPollMode;
 //
 /////////////////////////////////////////////////////////////////////////////
 
-ShortDurationLock s_lockTaskQueue( "TaskQueue" );
+ShortDurationLock s_lockTaskQueue( "TaskQueue", LockDebugInfo::k_nOrder_Max ); // Never take another lock while holding this
 
 CTaskTarget::~CTaskTarget()
 {
@@ -927,13 +997,16 @@ public:
 	/// This is set to null when we are asked to close the socket.
 	CRecvPacketCallback m_callback;
 
+	#if defined( _WIN32 ) && PlatformSupportsRecvMsg()
+		LPFN_WSARECVMSG m_pfnWSARecvMsg = nullptr;
+	#endif
 
 	// Implements IRawUDPSocket
-	virtual bool BSendRawPacketGather( int nChunks, const iovec *pChunks, const netadr_t &adrTo ) const override;
+	virtual bool BSendRawPacketGather( int nChunks, const iovec *pChunks, const netadr_t &adrTo, int ecn = -1 ) const override;
 	virtual void Close() override;
 
 	//// Send a packet, for really realz right now.  (No checking for fake loss or lag.)
-	inline bool BReallySendRawPacket( int nChunks, const iovec *pChunks, const netadr_t &adrTo ) const
+	inline bool BReallySendRawPacket( int nChunks, const iovec *pChunks, const netadr_t &adrTo, int ecn ) const
 	{
 		Assert( m_socket != INVALID_SOCKET );
 		Assert( nChunks > 0 );
@@ -960,13 +1033,43 @@ public:
 			addrSize = (socklen_t)adrTo.ToSockadr( &destAddress );
 		}
 
-		#ifdef STEAMNETWORKINGSOCKETS_ENABLE_ETW
-		{
-			int cbTotal = 0;
-			for ( int i = 0 ; i < nChunks ; ++i )
-				cbTotal += (int)pChunks[i].iov_len;
-			ETW_UDPSendPacket( adrTo, cbTotal );
-		}
+		// Emit ETW event
+		#if IsTraceLoggingEnabled() // I should not have to use the preprocessor here, but if I don't, GCC emits warnings about variables set but not used, even though the code, trivially, is not reachable
+			if ( IsTraceLoggingProviderEnabled( HTraceLogging_SteamNetworkingSockets ) )
+			{
+				int cbTotal = 0;
+				for ( int i = 0 ; i < nChunks ; ++i )
+					cbTotal += (int)pChunks[i].iov_len;
+
+				char header_buf[k_cbETWEventUDPPacketDataSize];
+				const void *header;
+				int cbHeader;
+				if ( likely( nChunks == 1 || pChunks[0].iov_len >= k_cbETWEventUDPPacketDataSize ) )
+				{
+					header = pChunks[0].iov_base;
+					cbHeader = (int)std::min( (size_t)pChunks[0].iov_len, (size_t)k_cbETWEventUDPPacketDataSize );
+				}
+				else
+				{
+					cbHeader = 0;
+					for ( int i = 0 ; i < nChunks ; ++i )
+					{
+						int cbChunkHeader = std::min( (int)pChunks[i].iov_len, (int)k_cbETWEventUDPPacketDataSize - cbHeader );
+						memcpy( header_buf + cbHeader, pChunks[i].iov_base, cbChunkHeader );
+						cbHeader += cbChunkHeader;
+					}
+					header = header_buf;
+				}
+
+				TraceLoggingWrite(
+					HTraceLogging_SteamNetworkingSockets,
+					"UDPSend",
+					//TraceLoggingLevel( WINEVENT_LEVEL_INFO ),
+					TraceLoggingSocketAddress( &destAddress, addrSize, "Addr" ),
+					TraceLoggingUInt16( (uint16)cbTotal, "Bytes" ),
+					TraceLoggingBinary( header, cbHeader, "Data" )
+				);
+			}
 		#endif
 
 		if ( GlobalConfig::PacketTraceMaxBytes.Get() >= 0 )
@@ -995,9 +1098,12 @@ public:
 
 			CHAR control[WSA_CMSG_SPACE(sizeof(INT))];
 
+			COMPILE_TIME_ASSERT( PlatformCanSendECN() );
+
 			// Check if we need to send ECN
-			int ecn = GlobalConfig::ECN.Get();
-			if ( ecn >= 0 )
+			if ( ecn < 0 )
+				ecn = ResolveECNSendGlobal();
+			if ( ecn > 0 ) // We assume that if we don't explicit specify an ECN, that zero will be used
 			{
 				wsaMsg.Control.len = sizeof(control);
 				wsaMsg.Control.buf = control;
@@ -1040,6 +1146,8 @@ public:
 				}
 			#endif
 		#else
+			COMPILE_TIME_ASSERT( !PlatformCanSendECN() );
+
 			bool bResult;
 			if ( nChunks == 1 )
 			{
@@ -1157,13 +1265,74 @@ static CUtlVector<CRawUDPSocketImpl *> s_vecRawSockets;
 /// Are any sockets pending destruction?
 static bool s_bRawSocketPendingDestruction;
 
+class CPacketLagger;
+struct CLaggedPacket final : public CPossibleOutOfOrderPacket
+{
+	// Store the info about the packet using RecvPktInfo_t, even if we are
+	// queued to send.  m_info.m_usecNow will store the time when we
+	// should be sent, while we are waiting
+	RecvPktInfo_t m_info;
+
+	// Linked list while we are in the CPacketLagger queue
+	CLaggedPacket *m_pPrev = nullptr;
+	CLaggedPacket *m_pNext = nullptr;
+	CPacketLagger *m_pLaggerOwner = nullptr;
+
+	// If we are really a CPossibleOutOfOrderPacket, and not just a
+	// lagged packet, this is our wire sequence number
+	int m_nWireSeqNum;
+
+	// Packet payload data
+	char m_pkt[ k_cbSteamNetworkingSocketsMaxUDPMsgLen ];
+
+	// Constructor used when lagging a packet to simulate latency
+	CLaggedPacket( CRawUDPSocketImpl *pSockOwner, const netadr_t &adrRemote, SteamNetworkingMicroseconds usecFlush, int cbPkt, uint8 tos )
+	: CPossibleOutOfOrderPacket()
+	, m_info{ m_pkt, cbPkt, usecFlush, adrRemote, false, tos, pSockOwner }
+	, m_nWireSeqNum( -1 ) // Fake lag, not out-of-order correction
+	{
+		Assert( cbPkt <= sizeof(m_pkt) );
+	}
+
+	// Constructor used when queuing a packet for possible out-of-order correction handling
+	CLaggedPacket( const RecvPktInfo_t &ctx, SteamNetworkingMicroseconds usecFlush, uint16 nWireSeqNum )
+	: CPossibleOutOfOrderPacket()
+	, m_info{ m_pkt, ctx.m_cbPkt, usecFlush, ctx.m_adrFrom, true, ctx.m_tos, ctx.m_pSock }
+	, m_nWireSeqNum( nWireSeqNum )
+	{
+		Assert( m_info.m_cbPkt < sizeof(m_pkt) );
+		memcpy( m_pkt, ctx.m_pPkt, m_info.m_cbPkt );
+	}
+ 
+	// Upcast
+	CRawUDPSocketImpl *SockOwner() const { return assert_cast<CRawUDPSocketImpl *>( m_info.m_pSock ); }
+
+	void Detach()
+	{
+		RemoveFromPacketLaggerList();
+		CPossibleOutOfOrderPacket::Detach();
+	}
+
+private:
+
+	// If we're in a packet lagger list, remove us
+	void RemoveFromPacketLaggerList();
+
+	// CPossibleOutOfOrderPacket override to do our derived class destruction
+	virtual void DoDestroy() override
+	{
+		RemoveFromPacketLaggerList();
+		CPossibleOutOfOrderPacket::DoDestroy();
+	}
+};
+
 /// Track packets that have fake lag applied and are pending to be sent/received
 class CPacketLagger : private IThinker
 {
 public:
 	~CPacketLagger() { Clear(); }
 
-	void LagPacket( CRawUDPSocketImpl *pSock, const netadr_t &adr, int msDelay, int nChunks, const iovec *pChunks )
+	void LagPacket( CRawUDPSocketImpl *pSock, const netadr_t &adr, SteamNetworkingMicroseconds usecTime, int nChunks, const iovec *pChunks, uint8 tos )
 	{
 		SteamNetworkingGlobalLock::AssertHeldByCurrentThread( "LagPacket" );
 
@@ -1183,39 +1352,9 @@ public:
 			return;
 		}
 
-		if ( msDelay < 1 )
-		{
-			AssertMsg( false, "Packet lag time must be positive!" );
-			msDelay = 1;
-		}
+		CLaggedPacket *pkt = new CLaggedPacket( pSock, adr, usecTime, cbPkt, tos );
 
-		// Limit to something sane
-		msDelay = std::min( msDelay, 5000 );
-		const SteamNetworkingMicroseconds usecTime = SteamNetworkingSockets_GetLocalTimestamp() + msDelay * 1000;
-
-		// Find the right place to insert the packet.  This is a dumb linear search, but in
-		// the steady state where the delay is constant, this search loop won't actually iterate,
-		// and we'll always be adding to the end of the queue
-		LaggedPacket *pkt = nullptr;
-		for ( CUtlLinkedList< LaggedPacket >::IndexType_t i = m_list.Tail(); i != m_list.InvalidIndex(); i = m_list.Previous( i ) )
-		{
-			if ( usecTime >= m_list[ i ].m_usecTime )
-			{
-				pkt = &m_list[ m_list.InsertAfter( i ) ];
-				break;
-			}
-		}
-		if ( pkt == nullptr )
-		{
-			pkt = &m_list[ m_list.AddToHead() ];
-		}
-	
-		pkt->m_pSockOwner = pSock;
-		pkt->m_adrRemote = adr;
-		pkt->m_usecTime = usecTime;
-		pkt->m_cbPkt = cbPkt;
-
-		// Gather them into buffer
+		// Gather the payload data data into the buffer
 		char *d = pkt->m_pkt;
 		for ( int i = 0 ; i < nChunks ; ++i )
 		{
@@ -1224,23 +1363,80 @@ public:
 			d += cbChunk;
 		}
 
-		Schedule();
+		// Find the right place to insert the packet, searching backwards from the end.  This is a dumb
+		// linear search, but in the steady state where the delay is constant, this search loop won't
+		// actually iterate, and we'll always be adding to the end of the queue
+		if ( m_pFirst )
+		{
+			CLaggedPacket *pInsertAfter = m_pLast;
+			for (;;)
+			{
+				if ( pInsertAfter->m_info.m_usecNow <= usecTime )
+				{
+					pkt->m_pPrev = pInsertAfter;
+					pkt->m_pNext = pInsertAfter->m_pNext;
+					pInsertAfter->m_pNext = pkt;
+					if ( pkt->m_pNext )
+					{
+						Assert( m_pLast != pInsertAfter );
+						Assert( pkt->m_pNext->m_pPrev == pInsertAfter );
+						pkt->m_pNext->m_pPrev = pkt;
+					}
+					else
+					{
+						Assert( m_pLast == pInsertAfter );
+						m_pLast = pkt;
+					}
+					break;
+				}
+
+				CLaggedPacket *p = pInsertAfter->m_pPrev;
+				if ( p == nullptr )
+				{
+					Assert( m_pFirst == pInsertAfter );
+					Assert( pInsertAfter->m_pPrev == nullptr );
+					pkt->m_pNext = pInsertAfter;
+					pInsertAfter->m_pPrev = pkt;
+					m_pFirst = pkt;
+					break;
+				}
+
+				Assert( m_pFirst != pInsertAfter );
+				Assert( p->m_pNext == pInsertAfter );
+				pInsertAfter = p;
+			}
+		}
+		else
+		{
+			// Empty list
+			m_pFirst = m_pLast = pkt;
+		}
+		pkt->m_pLaggerOwner = this;
+
+		SetNextThinkTime( m_pFirst->m_info.m_usecNow );
 	}
 
+	/// Implements IThinker
 	/// Periodic processing
-	virtual void Think( SteamNetworkingMicroseconds usecNow ) OVERRIDE
+	virtual void Think( SteamNetworkingMicroseconds usecNow ) override
 	{
-
-		// Just always process packets in queue order.  This means there could be some
-		// weird burst or jankiness if the delay time is changed, but that's OK.
-		while ( !m_list.IsEmpty() )
+		while ( m_pFirst )
 		{
-			LaggedPacket &pkt = m_list[ m_list.Head() ];
-			if ( pkt.m_usecTime > usecNow )
+
+			// Next packet set to dispatch in the future?
+			if ( m_pFirst->m_info.m_usecNow > usecNow )
+			{
+				SetNextThinkTime( m_pFirst->m_info.m_usecNow );
 				break;
+			}
+
+			CLaggedPacket *p = m_pFirst;
+			Assert( p->m_pLaggerOwner == this );
+			p->Detach();
+			Assert( m_pFirst != p );
 
 			// Make sure socket is still in good shape.
-			CRawUDPSocketImpl *pSock = pkt.m_pSockOwner;
+			CRawUDPSocketImpl *pSock = p->SockOwner();
 			if ( pSock )
 			{
 				if ( pSock->m_socket == INVALID_SOCKET || !pSock->m_callback.m_fnCallback )
@@ -1249,93 +1445,270 @@ public:
 				}
 				else
 				{
-					ProcessPacket( pkt, usecNow );
+					p->m_info.m_usecNow = usecNow;
+					ProcessPacket( *p );
 				}
 			}
-			m_list.RemoveFromHead();
+			p->Destroy();
 		}
-
-		Schedule();
 	}
 
 	/// Nuke everything
 	void Clear()
 	{
-		m_list.RemoveAll();
+		while ( m_pFirst != nullptr )
+		{
+			CLaggedPacket *p = m_pFirst;
+			p->Destroy();
+			Assert( m_pFirst != p );
+		}
 		IThinker::ClearNextThinkTime();
 	}
 
 	/// Called when we're about to destroy a socket
 	void AboutToDestroySocket( const CRawUDPSocketImpl *pSock )
 	{
-		// Just do a dumb linear search.  This list should be empty in
+		// Just do a dumb linear search.  This list should be very short
 		// production situations, and socket destruction is relatively rare,
 		// so its not worth making this complicated.
-		int idx = m_list.Head();
-		while ( idx != m_list.InvalidIndex() )
+		CLaggedPacket *p = m_pFirst;
+		while ( p )
 		{
-			int idxNext = m_list.Next( idx );
-			if ( m_list[idx].m_pSockOwner == pSock )
-				m_list[idx].m_pSockOwner = nullptr;
-			idx = idxNext;
+			CLaggedPacket *x = p;
+			p = p->m_pNext;
+			if ( x->m_info.m_pSock == pSock )
+			{
+				x->Destroy();
+			}
 		}
 	}
 
-protected:
-
-	/// Set the next think time as appropriate
-	void Schedule()
+	// Queue a packet near the front of the queue.  It will go AFTER any packets
+	// that have the same queue time
+	void QueueNearFront( CLaggedPacket *pkt )
 	{
-		if ( m_list.IsEmpty() )
-			ClearNextThinkTime();
+		Assert( pkt->m_pLaggerOwner == nullptr );
+		if ( m_pFirst )
+		{
+			CLaggedPacket *pInsertBefore = m_pFirst;
+			for (;;)
+			{
+				if ( pInsertBefore->m_info.m_usecNow > pkt->m_info.m_usecNow )
+				{
+					pkt->m_pNext = pInsertBefore;
+					pkt->m_pPrev = pInsertBefore->m_pPrev;
+					pInsertBefore->m_pPrev = pkt;
+					if ( pkt->m_pPrev )
+					{
+						Assert( m_pFirst != pInsertBefore );
+						Assert( pkt->m_pPrev->m_pNext == pInsertBefore );
+						pkt->m_pPrev->m_pNext = pkt;
+					}
+					else
+					{
+						Assert( m_pFirst == pInsertBefore );
+						m_pFirst = pkt;
+					}
+					break;
+				}
+
+				CLaggedPacket *n = pInsertBefore->m_pNext;
+				if ( n == nullptr )
+				{
+					Assert( m_pLast == pInsertBefore );
+					Assert( pInsertBefore->m_pNext == nullptr );
+					pkt->m_pPrev = pInsertBefore;
+					pInsertBefore->m_pNext = pkt;
+					m_pLast = pkt;
+					break;
+				}
+
+				Assert( m_pLast != pInsertBefore );
+				Assert( n->m_pPrev == pInsertBefore );
+				pInsertBefore = n;
+			}
+		}
 		else
-			SetNextThinkTime( m_list[ m_list.Head() ].m_usecTime );
+		{
+			// Empty list
+			m_pFirst = m_pLast = pkt;
+		}
+		pkt->m_pLaggerOwner = this;
+
+		SetNextThinkTime( m_pFirst->m_info.m_usecNow );
 	}
 
-	struct LaggedPacket
-	{
-		CRawUDPSocketImpl *m_pSockOwner;
-		netadr_t m_adrRemote;
-		SteamNetworkingMicroseconds m_usecTime; /// Time when it should be sent or received
-		int m_cbPkt;
-		char m_pkt[ k_cbSteamNetworkingSocketsMaxUDPMsgLen ];
-	};
-	CUtlLinkedList<LaggedPacket> m_list;
+	CLaggedPacket *m_pFirst = nullptr;
+	CLaggedPacket *m_pLast = nullptr;
+
+protected:
 
 	/// Do whatever we're supposed to do with the next packet
-	virtual void ProcessPacket( const LaggedPacket &pkt, SteamNetworkingMicroseconds usecNow ) = 0;
+	virtual void ProcessPacket( const CLaggedPacket &pkt ) = 0;
 };
+
+void CLaggedPacket::RemoveFromPacketLaggerList()
+{
+	if ( m_pLaggerOwner )
+	{
+		if ( m_pPrev )
+		{
+			Assert( m_pPrev->m_pNext == this );
+			m_pPrev->m_pNext = m_pNext;
+		}
+		else
+		{
+			Assert( m_pLaggerOwner->m_pFirst == this );
+			m_pLaggerOwner->m_pFirst = m_pNext;
+		}
+		if ( m_pNext )
+		{
+			Assert( m_pNext->m_pPrev == this );
+			m_pNext->m_pPrev = m_pPrev;
+		}
+		else
+		{
+			Assert( m_pLaggerOwner->m_pLast == this );
+			m_pLaggerOwner->m_pLast = m_pPrev;
+		}
+	}
+	else
+	{
+		Assert( m_pPrev == nullptr );
+		Assert( m_pNext == nullptr );
+	}
+	m_pLaggerOwner = nullptr;
+	m_pPrev = nullptr;
+	m_pNext = nullptr;
+}
 
 class CPacketLaggerSend final : public CPacketLagger
 {
 public:
-	virtual void ProcessPacket( const LaggedPacket &pkt, SteamNetworkingMicroseconds usecNow ) override
+	virtual void ProcessPacket( const CLaggedPacket &pkt ) override
 	{
 		iovec temp;
-		temp.iov_len = pkt.m_cbPkt;
+		temp.iov_len = pkt.m_info.m_cbPkt;
 		temp.iov_base = (void *)pkt.m_pkt;
-		pkt.m_pSockOwner->BReallySendRawPacket( 1, &temp, pkt.m_adrRemote );
+		int ecn = pkt.m_info.m_tos == 0xff ? -1 : pkt.m_info.m_tos;
+		pkt.SockOwner()->BReallySendRawPacket( 1, &temp, pkt.m_info.m_adrFrom, ecn );
 	}
 };
 
 class CPacketLaggerRecv final : public CPacketLagger
 {
 public:
-	virtual void ProcessPacket( const LaggedPacket &pkt, SteamNetworkingMicroseconds usecNow ) override
+	virtual void ProcessPacket( const CLaggedPacket &pkt ) override
 	{
-		// Copy data out of queue into local variables, just in case a
-		// packet is queued while we're in this function.  We don't want
-		// our list to shift in memory, and the pointer we pass to the
-		// caller to dangle.
-		char temp[ k_cbSteamNetworkingSocketsMaxUDPMsgLen ];
-		memcpy( temp, pkt.m_pkt, pkt.m_cbPkt );
-		//pkt.m_pSockOwner->m_callback( RecvPktInfo_t{ temp, pkt.m_cbPkt, usecNow, pkt.m_usecTime, 0, pkt.m_adrRemote, pkt.m_pSockOwner } );
-		pkt.m_pSockOwner->m_callback( RecvPktInfo_t{ temp, pkt.m_cbPkt, usecNow, pkt.m_adrRemote, pkt.m_pSockOwner } );
+		pkt.SockOwner()->m_callback( pkt.m_info );
 	}
 };
 
 static CPacketLaggerSend s_packetLagQueueSend;
 static CPacketLaggerRecv s_packetLagQueueRecv;
+
+EHandleOutOfOrder HandleOutOfOrderPacket( uint16 nWireSeqNum, LinkStatsTrackerBase &flowStats, const RecvPktInfo_t &ctx )
+{
+	auto *pPendingPkt = static_cast<CLaggedPacket *>( flowStats.GetPossibleOutOfOrderPacket() );
+
+	if ( pPendingPkt )
+	{
+		Assert( pPendingPkt->m_nWireSeqNum >= 0 );
+		Assert( pPendingPkt->m_info.m_bQueuedForOutOfOrder );
+		int16 nDelta = (int16)( pPendingPkt->m_nWireSeqNum - nWireSeqNum );
+
+		// If the packet we have pended comes after the one we are
+		// processing now, then we can use regular processing for the
+		// current packet.
+		if ( nDelta > 1 )
+		{
+			// Pending packet comes later than the current
+			// packet, but is not immediately next.  Process
+			// the current packet, and keep waiting
+			SpewDebug( "[%s] OutOfOrder delta %d (%04x-%04x), processing current packet\n",
+				CUtlNetAdrRender( ctx.m_adrFrom ).String(), nDelta, pPendingPkt->m_nWireSeqNum, nWireSeqNum );
+			return EHandleOutOfOrder::ContinueProcessing;
+		}
+
+		// We're going to process the pended packet now, either before
+		// or after the current packet.  The pended packet will
+		// always use the queue, and the current packet will either
+		// be processed now or put in the queue
+		pPendingPkt->Detach();
+		pPendingPkt->m_info.m_usecNow = k_nThinkTime_ASAP;
+		s_packetLagQueueRecv.QueueNearFront( pPendingPkt );
+
+		// Don't ever re-queue a packet that we have already queued once
+		if ( ctx.m_bQueuedForOutOfOrder )
+		{
+			// This is weird, always spew
+			SpewMsg( "[%s] OutOfOrder not re-queuing packet (%04x-%04x)\n",
+				CUtlNetAdrRender( ctx.m_adrFrom ).String(), pPendingPkt->m_nWireSeqNum, nWireSeqNum );
+
+			// Continue processing current packet, then the pended packet
+			return EHandleOutOfOrder::ContinueProcessing;
+		}
+
+		// Pended packet should be delivered after current packet?
+		// (The situation that this whole thing was created
+		// to correct)
+		if ( nDelta > 0 )
+		{
+			// Count up stats
+			flowStats.ProcessSequencedPacket_OutOfOrderCorrected();
+
+			// Check for logging
+			SpewVerbose( "[%s] OutOfOrder corrected (%04x,%04x)\n",
+				CUtlNetAdrRender( ctx.m_adrFrom ).String(), pPendingPkt->m_nWireSeqNum, nWireSeqNum );
+
+			// Continue processing current packet, then the pended packet
+			return EHandleOutOfOrder::CorrectedContinueProcessing;
+		}
+
+		// Pended packet comes before the current packet, or
+		// a duplicate.  Either way, let's process the pended
+		// one first, and then the current packet.  This most
+		// expensive path is unfortunately where go in the
+		// common case of an ordinary dropped packet.
+		//
+		// Queue the current packet to run after the pended packet.
+		s_packetLagQueueRecv.QueueNearFront( new CLaggedPacket( ctx, k_nThinkTime_ASAP, nWireSeqNum ) );
+
+		// Do not process the current packet any further
+		return EHandleOutOfOrder::AbortProcessing;
+	}
+
+	// If this packet has already been queued, don't queue it again.  This is the path
+	// we will go through if we sit in the Nagle queue and then get queued and the skipped packet
+	// doesn't arrive, and is the most common reason to go through here
+	if ( likely( ctx.m_bQueuedForOutOfOrder ) )
+	{
+		SpewDebug( "[%s] OutOfOrder processing nagle queued %04x\n", CUtlNetAdrRender( ctx.m_adrFrom ).String(), nWireSeqNum );
+		return EHandleOutOfOrder::ContinueProcessing;
+	}
+
+	// If we get here, it's because the current packet represents a little skip
+	// forward.  Hold on to this packet for a little bit, in case a packet
+	// comes in to fill the gap.  Check how long we should wait, and if the feature
+	// is disabled
+	int64 usecWait = GlobalConfig::OutOfOrderCorrectionWindowMicroseconds.Get();
+	if ( usecWait <= 0 )
+		return EHandleOutOfOrder::ContinueProcessing; // Out of order correction disabled - just continue processing as normal
+
+	// Set a timeout and add it to the queue.  We use the "near front" because
+	// this list is really short when we are not doing fake lag.  And if we are doing fake lag
+	// then we probably won't to do it near the end
+	auto *pNewPkt = new CLaggedPacket( ctx, ctx.m_usecNow + usecWait, nWireSeqNum );
+	pNewPkt->SetOwner( &flowStats );
+	s_packetLagQueueRecv.QueueNearFront( pNewPkt );
+
+	// Check for logging
+	SpewDebug( "[%s] OutOfOrder skip (%04x-%04x), queued for %lldusec\n",
+		CUtlNetAdrRender( ctx.m_adrFrom ).String(), nWireSeqNum, (uint16)flowStats.m_nMaxRecvPktNum, (long long)usecWait );
+
+	// Do not process the packet any further at this time
+	return EHandleOutOfOrder::AbortProcessing;
+}
 
 /// Object used to wake our background thread efficiently
 #if defined( WAKE_THREAD_USING_EVENT )
@@ -1403,7 +1776,30 @@ void WakeServiceThread()
 	#endif
 }
 
-bool CRawUDPSocketImpl::BSendRawPacketGather( int nChunks, const iovec *pChunks, const netadr_t &adrTo ) const
+inline SteamNetworkingMicroseconds RandomJitter( const GlobalConfigValue<float> &ValAvg, const GlobalConfigValue<float> &ValMax, const GlobalConfigValue<float> &ValPct )
+{
+	// The defaults disable jitter by setting the *average* to 0, so check that first.
+	if ( likely( ValAvg.Get() ) <= 0.0f )
+		return 0;
+	if ( ValMax.Get() <= 0.0f )
+		return 0;
+	if ( !RandomBoolWithOdds( ValPct.Get() ) )
+		return 0;
+
+	// Unscaled exponential distribution
+	float r = WeakRandomFloat( 0.000001f, 1.0f ); // log of 0 is undefined, set the minimum to a value that can be subtracted from 1.  (Something close to FLT_EPSILON.)
+	float x = -logf( r );
+	if ( !( x > 0.0f ) ) // Written "backwards" just in case math blows up
+		return 0;
+
+	// Scale and clamp
+	float flJitterMS = std::min( x*ValAvg.Get(), ValMax.Get() );
+
+	// Convert to integer microseconds
+	return (SteamNetworkingMicroseconds)( flJitterMS * 1000.0f );
+}
+
+bool CRawUDPSocketImpl::BSendRawPacketGather( int nChunks, const iovec *pChunks, const netadr_t &adrTo, int ecn ) const
 {
 	SteamNetworkingGlobalLock::AssertHeldByCurrentThread();
 
@@ -1441,32 +1837,51 @@ bool CRawUDPSocketImpl::BSendRawPacketGather( int nChunks, const iovec *pChunks,
 	if ( RandomBoolWithOdds( GlobalConfig::FakePacketLoss_Send.Get() ) )
 		return true;
 
-	// Fake lag?
-	int32 nPacketFakeLagTotal = GlobalConfig::FakePacketLag_Send.Get();
-
-	// Check for simulating random packet reordering
+	// Read convars and decide if we're going to simulate any lag, jitter, reordering, or duplication
+	int msFakeLag = GlobalConfig::FakePacketLag_Send.Get();
+	SteamNetworkingMicroseconds usecReorderLag = 0;
 	if ( RandomBoolWithOdds( GlobalConfig::FakePacketReorder_Send.Get() ) )
-	{
-		nPacketFakeLagTotal += GlobalConfig::FakePacketReorder_Time.Get();
-	}
+		usecReorderLag = GlobalConfig::FakePacketReorder_Time.Get()*1000;
+	SteamNetworkingMicroseconds usecJitter = RandomJitter( GlobalConfig::FakePacketJitter_Send_Avg, GlobalConfig::FakePacketJitter_Send_Max, GlobalConfig::FakePacketJitter_Send_Pct );
+	bool bDup = RandomBoolWithOdds( GlobalConfig::FakePacketDup_Send.Get() );
 
-	// Check for simulating random packet duplication
-	if ( RandomBoolWithOdds( GlobalConfig::FakePacketDup_Send.Get() ) )
+	// Anything active?
+	static SteamNetworkingMicroseconds s_usecMinNextJitteredTime;
+	if ( unlikely( msFakeLag > 0 || usecReorderLag > 0 || usecJitter > 0 || bDup || s_usecMinNextJitteredTime != 0 ) )
 	{
-		int32 nDupLag = nPacketFakeLagTotal + WeakRandomInt( 0, GlobalConfig::FakePacketDup_TimeMax.Get() );
-		nDupLag = std::max( 1, nDupLag );
-		s_packetLagQueueSend.LagPacket( const_cast<CRawUDPSocketImpl *>( this ), adrTo, nDupLag, nChunks, pChunks );
-	}
+		SteamNetworkingMicroseconds usecNow = SteamNetworkingSockets_GetLocalTimestamp();
+		SteamNetworkingMicroseconds usecWhenProcess = usecNow + msFakeLag*1000;
+		usecJitter = std::max( usecJitter, s_usecMinNextJitteredTime - usecWhenProcess );
+		if ( usecJitter > 0 )
+		{
+			usecWhenProcess += usecJitter;
+			s_usecMinNextJitteredTime = usecWhenProcess + 1;
+		}
+		else
+		{
+			// End of clump, clear this so we can switch back to the
+			// fast path once options are turned off
+			s_usecMinNextJitteredTime = 0;
+		}
+		usecWhenProcess += usecReorderLag;
 
-	// Lag the original packet?
-	if ( nPacketFakeLagTotal > 0 )
-	{
-		s_packetLagQueueSend.LagPacket( const_cast<CRawUDPSocketImpl *>( this ), adrTo, nPacketFakeLagTotal, nChunks, pChunks );
-		return true;
+		// Check for simulating random packet duplication
+		if ( bDup )
+		{
+			SteamNetworkingMicroseconds usecDupLag = 1 + (SteamNetworkingMicroseconds)WeakRandomFloat( 0.0f, GlobalConfig::FakePacketDup_TimeMax.Get()*1000.0f );
+			s_packetLagQueueSend.LagPacket( const_cast<CRawUDPSocketImpl *>( this ), adrTo, usecWhenProcess + usecDupLag, nChunks, pChunks, (uint8)ecn );
+		}
+
+		// Lag the original packet?
+		if ( usecWhenProcess > usecNow )
+		{
+			s_packetLagQueueSend.LagPacket( const_cast<CRawUDPSocketImpl *>( this ), adrTo, usecWhenProcess, nChunks, pChunks, (uint8)ecn );
+			return true;
+		}
 	}
 
 	// Now really send it
-	return BReallySendRawPacket( nChunks, pChunks, adrTo );
+	return BReallySendRawPacket( nChunks, pChunks, adrTo, ecn );
 }
 
 void CRawUDPSocketImpl::InternalAddToCleanupQueue()
@@ -1670,6 +2085,17 @@ static SOCKET OpenUDPSocketBoundToSockAddr( const void *pSockaddr, size_t len, S
 		#endif
 	}
 
+	// Enable receiving of the ToS field in the ancillary data
+	#if PlatformSupportsRecvTOS()
+	{
+		opt = 1;
+		if ( setsockopt( sock, IPPROTO_IP, IP_RECVTOS, (char *)&opt, sizeof(opt) ) == -1 )
+		{
+			SpewWarning( "sockopt(IPPROTO_IP, IP_RECVTOS, 1) failed (0x%x), will not be able to read TOS\n", GetLastSocketError() );
+		}
+	}
+	#endif
+
 	// Bind it to specific desired local port/IP
 	if ( bind( sock, (struct sockaddr *)pSockaddr, (socklen_t)len ) == -1 )
 	{
@@ -1853,6 +2279,22 @@ static CRawUDPSocketImpl *OpenRawUDPSocketInternal( CRecvPacketCallback callback
 		#error "How will we poll this socket?"
 	#endif
 
+	// On Windows, try to locate the WSARecvMsg function.  I don't think that this
+	// function pointer varies per socket, but the socket is an argument to the WSAIoctl
+	// function, so we will look up the function for every sock et we create.  This whole
+	// API seems kinda insane to me.
+	#if defined( _WIN32 ) && PlatformSupportsRecvMsg()
+	{
+		GUID guidWSARecvMsg = WSAID_WSARECVMSG;
+		DWORD dwBytes;
+		pSock->m_pfnWSARecvMsg = nullptr;
+		WSAIoctl( sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
+                      &guidWSARecvMsg, sizeof(guidWSARecvMsg),
+                      &pSock->m_pfnWSARecvMsg, sizeof(pSock->m_pfnWSARecvMsg),
+                      &dwBytes, NULL, NULL);
+	}
+	#endif
+
 	// Add to master list.  (Hopefully we usually won't have that many.)
 	s_vecRawSockets.AddToTail( pSock );
 
@@ -1899,10 +2341,67 @@ static bool DrainSocket( CRawUDPSocketImpl *pSock )
 		#endif
 
 		char buf[ k_cbSteamNetworkingSocketsMaxUDPMsgLen + 1024 ];
+		iovec iov_buf;
+		iov_buf.iov_base = buf;
+		iov_buf.iov_len = sizeof(buf);
 
 		sockaddr_storage from;
-		socklen_t fromlen = sizeof(from);
-		int ret = ::recvfrom( pSock->m_socket, buf, sizeof( buf ), 0, (sockaddr *)&from, &fromlen );
+
+		// buffer to receive anciliary data
+		#if PlatformSupportsRecvMsg()
+		char buf_control[ 64 ];
+		#endif
+
+		// Read the next packet, using a message structure if possible.
+		// ret will be negative on failure, and the length of the returned
+		// packet, will be placed in iov_buf.iov_len
+		//
+		// We prefer to use WSARecvMsg when it is available, so that we can receive the TOS field.
+		int ret;
+		#if !PlatformSupportsRecvMsg()
+			socklen_t fromlen = sizeof(from);
+			ret = ::recvfrom( pSock->m_socket, buf, sizeof( buf ), 0, (sockaddr *)&from, &fromlen );
+			iov_buf.iov_len = ret;
+		#elif defined( _WIN32 )
+			WSAMSG msg;
+			msg.name = (sockaddr *)&from;
+			msg.namelen = sizeof(from);
+
+			// I *believe* that WSARecvMsg is available on all WIN32 platforms we care about,
+			// but we allow a fallback path to plain old recvfrom() since it's easy to do so.
+			if ( likely( pSock->m_pfnWSARecvMsg ) )
+			{
+				msg.dwBufferCount = 1;
+				msg.lpBuffers = (WSABUF *)&iov_buf;
+				msg.Control.len = sizeof(buf);
+				msg.Control.buf = buf_control;
+				msg.dwFlags = 0;
+
+				DWORD dwNumberofBytesReceived = 0;
+				ret = (*pSock->m_pfnWSARecvMsg)( pSock->m_socket, &msg, &dwNumberofBytesReceived, nullptr, nullptr );
+				iov_buf.iov_len = dwNumberofBytesReceived;
+			}
+			else
+			{
+				ret = ::recvfrom( pSock->m_socket, buf, sizeof(buf), 0, msg.name, &msg.namelen );
+				iov_buf.iov_len = ret;
+				msg.Control.len = 0;
+			}
+
+		#else
+			// POSIX
+			msghdr msg;
+			msg.msg_name = (sockaddr *)&from;
+			msg.msg_namelen = sizeof(from);
+			msg.msg_iov = &iov_buf;
+			msg.msg_iovlen = 1;
+			msg.msg_control = buf_control;
+			msg.msg_controllen = sizeof(buf_control);
+			msg.msg_flags = 0;
+			ret = ::recvmsg( pSock->m_socket, &msg, 0 );
+			iov_buf.iov_len = ret;
+		#endif
+
 		SteamNetworkingMicroseconds usecRecvFromEnd = SteamNetworkingSockets_GetLocalTimestamp();
 
 		#ifdef STEAMNETWORKINGSOCKETS_LOWLEVEL_TIME_SOCKET_CALLS
@@ -1932,6 +2431,16 @@ static bool DrainSocket( CRawUDPSocketImpl *pSock )
 		// be handled/reported in the same way as any other bogus packet.)
 		if ( ret < 0 )
 			break;
+
+		// Emit ETW event
+		TraceLoggingWrite(
+			HTraceLogging_SteamNetworkingSockets,
+			"UDPRecv",
+			//TraceLoggingLevel( WINEVENT_LEVEL_INFO ),
+			TraceLoggingSocketAddress( &from, msg.namelen, "Addr" ),
+			TraceLoggingUInt16( (uint16)iov_buf.iov_len, "Bytes" ),
+			TraceLoggingBinary( buf, std::min( k_cbETWEventUDPPacketDataSize, (int)iov_buf.iov_len ), "Data" )
+		);
 
 		// Add a tag.  If we end up holding the lock for a long time, this tag
 		// will tell us how many packets were processed
@@ -1967,6 +2476,47 @@ static bool DrainSocket( CRawUDPSocketImpl *pSock )
 		RecvPktInfo_t info;
 		info.m_adrFrom.SetFromSockadr( &from );
 
+		// Read the TOS field from the ancillary data.  We should have exactly one piece of control data
+		// and it should be this!
+		info.m_tos = 0xff;
+		#if PlatformSupportsRecvMsg() && PlatformSupportsRecvTOS()
+		{
+			cmsghdr *cmsg = CMSG_FIRSTHDR( &msg );
+			if ( cmsg )
+			{
+				if ( unlikely( cmsg->cmsg_level != IPPROTO_IP || cmsg->cmsg_type != IP_TOS ) )
+				{
+					AssertMsgOnce( false, "Extra control data returned besides TOS?  0x%x/0x%x", cmsg->cmsg_level, cmsg->cmsg_type );
+					do
+					{
+						cmsg = CMSG_NXTHDR( &msg, cmsg );
+						if ( !cmsg )
+						{
+							AssertMsgOnce( false, "No control data returned even though we asked for TOS?" );
+							goto tos_done;
+						}
+					} while ( cmsg->cmsg_level != IPPROTO_IP || cmsg->cmsg_type != IP_TOS );
+				}
+
+				#ifdef _WIN32
+					AssertMsgOnce( cmsg->cmsg_len == sizeof(cmsghdr) + sizeof(int), "Unexpected IP_TOS cmsg_len %lld", (long long)cmsg->cmsg_len );
+					info.m_tos = (uint8)*((int *) WSA_CMSG_DATA(cmsg));
+				#else
+					AssertMsgOnce( cmsg->cmsg_len == sizeof(cmsghdr) + sizeof(uint8), "Unexpected IP_TOS cmsg_len %lld", (long long)cmsg->cmsg_len );
+					info.m_tos = *((uint8 *) CMSG_DATA(cmsg));
+				#endif
+
+				cmsg = CMSG_NXTHDR( &msg, cmsg );
+				if ( unlikely( cmsg != nullptr ) )
+				{
+					AssertMsgOnce( false, "Extra control data returned besides TOS?  0x%x/0x%x", cmsg->cmsg_level, cmsg->cmsg_type );
+				}
+							
+			}
+		}
+		tos_done:
+		#endif
+
 		// If we're dual stack, convert mapped IPv4 back to ordinary IPv4
 		if ( pSock->m_nAddressFamilies == k_nAddressFamily_DualStack )
 			info.m_adrFrom.BConvertMappedToIPv4();
@@ -1974,49 +2524,59 @@ static bool DrainSocket( CRawUDPSocketImpl *pSock )
 		// Check for tracing
 		if ( GlobalConfig::PacketTraceMaxBytes.Get() >= 0 )
 		{
-			iovec tmp;
-			tmp.iov_base = buf;
-			tmp.iov_len = ret;
-			pSock->TracePkt( false, info.m_adrFrom, 1, &tmp );
+			pSock->TracePkt( false, info.m_adrFrom, 1, &iov_buf );
 		}
 
-		int32 nPacketFakeLagTotal = GlobalConfig::FakePacketLag_Recv.Get();
-
-		// Check for simulating random packet reordering
+		// Read convars and decide if we're going to simulate any lag, jitter, reordering, or duplication
+		int msFakeLag = GlobalConfig::FakePacketLag_Recv.Get();
+		SteamNetworkingMicroseconds usecReorderLag = 0;
 		if ( RandomBoolWithOdds( GlobalConfig::FakePacketReorder_Recv.Get() ) )
+			usecReorderLag = GlobalConfig::FakePacketReorder_Time.Get()*1000;
+		SteamNetworkingMicroseconds usecJitter = RandomJitter( GlobalConfig::FakePacketJitter_Recv_Avg, GlobalConfig::FakePacketJitter_Recv_Max, GlobalConfig::FakePacketJitter_Recv_Pct );
+		bool bDup = RandomBoolWithOdds( GlobalConfig::FakePacketDup_Recv.Get() );
+
+		// Anything active?
+		static SteamNetworkingMicroseconds s_usecMinNextJitteredTime;
+		if ( unlikely( msFakeLag > 0 || usecReorderLag > 0 || usecJitter > 0 || bDup || s_usecMinNextJitteredTime != 0 ) )
 		{
-			nPacketFakeLagTotal += GlobalConfig::FakePacketReorder_Time.Get();
+			SteamNetworkingMicroseconds usecNow = SteamNetworkingSockets_GetLocalTimestamp();
+			SteamNetworkingMicroseconds usecWhenProcess = usecNow + msFakeLag*1000;
+			usecJitter = std::max( usecJitter, s_usecMinNextJitteredTime - usecWhenProcess );
+			if ( usecJitter > 0 )
+			{
+				usecWhenProcess += usecJitter;
+				s_usecMinNextJitteredTime = usecWhenProcess + 1;
+			}
+			else
+			{
+				// End of clump, clear this so we can switch back to the
+				// fast path once options are turned off
+				s_usecMinNextJitteredTime = 0;
+			}
+			usecWhenProcess += usecReorderLag;
+
+			// Check for simulating random packet duplication
+			if ( bDup )
+			{
+				SteamNetworkingMicroseconds usecDupLag = 1 + (SteamNetworkingMicroseconds)WeakRandomFloat( 0.0f, GlobalConfig::FakePacketDup_TimeMax.Get()*1000.0f );
+				s_packetLagQueueRecv.LagPacket( pSock, info.m_adrFrom, usecWhenProcess + usecDupLag, 1, &iov_buf, info.m_tos );
+			}
+
+			// Lag the original packet?
+			if ( usecWhenProcess > usecNow )
+			{
+				s_packetLagQueueRecv.LagPacket( pSock, info.m_adrFrom, usecWhenProcess, 1, &iov_buf, info.m_tos );
+				continue;
+			}
 		}
 
-		// Check for simulating random packet duplication
-		if ( RandomBoolWithOdds( GlobalConfig::FakePacketDup_Recv.Get() ) )
-		{
-			int32 nDupLag = nPacketFakeLagTotal + WeakRandomInt( 0, GlobalConfig::FakePacketDup_TimeMax.Get() );
-			nDupLag = std::max( 1, nDupLag );
-			iovec temp;
-			temp.iov_len = ret;
-			temp.iov_base = buf;
-			s_packetLagQueueRecv.LagPacket( pSock, info.m_adrFrom, nDupLag, 1, &temp );
-		}
-
-		// Check for simulating lag
-		if ( nPacketFakeLagTotal > 0 )
-		{
-			iovec temp;
-			temp.iov_len = ret;
-			temp.iov_base = buf;
-			s_packetLagQueueRecv.LagPacket( pSock, info.m_adrFrom, nPacketFakeLagTotal, 1, &temp );
-		}
-		else
-		{
-			ETW_UDPRecvPacket( info.m_adrFrom, ret );
-
-			info.m_pPkt = buf;
-			info.m_cbPkt = ret;
-			info.m_usecNow = usecRecvFromEnd;
-			info.m_pSock = pSock;
-			pSock->m_callback( info );
-		}
+		// Process the packet now
+		info.m_pPkt = buf;
+		info.m_cbPkt = (int)iov_buf.iov_len;
+		info.m_usecNow = usecRecvFromEnd;
+		info.m_pSock = pSock;
+		info.m_bQueuedForOutOfOrder = false;
+		pSock->m_callback( info );
 
 		#ifdef STEAMNETWORKINGSOCKETS_LOWLEVEL_TIME_SOCKET_CALLS
 			SteamNetworkingMicroseconds usecProcessPacketEnd = SteamNetworkingSockets_GetLocalTimestamp();
@@ -3119,7 +3679,7 @@ void CSharedSocket::RemoteHost::Close()
 //
 /////////////////////////////////////////////////////////////////////////////
 
-static ShortDurationLock s_systemSpewLock( "SystemSpew" );
+static ShortDurationLock s_systemSpewLock( "SystemSpew", LockDebugInfo::k_nOrder_Max ); // Never take another lock while holding this
 SteamNetworkingMicroseconds g_usecLastRateLimitSpew;
 int g_nRateLimitSpewCount;
 ESteamNetworkingSocketsDebugOutputType g_eAppSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_Msg; // Option selected by app
@@ -3270,7 +3830,7 @@ bool BSteamNetworkingSocketsLowLevelAddRef( SteamNetworkingErrMsg &errMsg )
 		CCrypto::Init();
 
 		// Initialize event tracing
-		ETW_Init();
+		TraceLoggingRegister( HTraceLogging_SteamNetworkingSockets );
 
 		// Give us a extra time here.  This is a one-time init function and the OS might
 		// need to load up libraries and stuff.
@@ -3515,7 +4075,7 @@ void SteamNetworkingSocketsLowLevelDecRef()
 	s_packetLagQueueSend.Clear();
 
 	// Shutdown event tracing
-	ETW_Kill();
+	TraceLoggingUnregister( HTraceLogging_SteamNetworkingSockets );
 
 	// Shutdown Dual wifi support
 	DualWifiShutdown();
@@ -3952,6 +4512,47 @@ STEAMNETWORKINGSOCKETS_INTERFACE void SteamNetworkingSockets_DefaultPreFormatDeb
 
 	// Gah, some, but not all, of our code has newlines on the end
 	V_StripTrailingWhitespaceASCII( buf );
+
+	// Emit an ETW event.  Unfortunately, TraceLoggingLevel requires a constant argument
+	if ( IsTraceLoggingProviderEnabled( HTraceLogging_SteamNetworkingSockets ) )
+	{
+		if ( eType <= k_ESteamNetworkingSocketsDebugOutputType_Error )
+		{
+			TraceLoggingWrite(
+				HTraceLogging_SteamNetworkingSockets,
+				"Spew",
+				TraceLoggingLevel( WINEVENT_LEVEL_ERROR ),
+				TraceLoggingString( buf, "Msg" )
+			);
+		}
+		else if ( eType == k_ESteamNetworkingSocketsDebugOutputType_Warning )
+		{
+			TraceLoggingWrite(
+				HTraceLogging_SteamNetworkingSockets,
+				"Spew",
+				TraceLoggingLevel( WINEVENT_LEVEL_WARNING ),
+				TraceLoggingString( buf, "Msg" )
+			);
+		}
+		else if ( eType >= k_ESteamNetworkingSocketsDebugOutputType_Verbose )
+		{
+			TraceLoggingWrite(
+				HTraceLogging_SteamNetworkingSockets,
+				"Spew",
+				TraceLoggingLevel( WINEVENT_LEVEL_VERBOSE ),
+				TraceLoggingString( buf, "Msg" )
+			);
+		}
+		else
+		{
+			TraceLoggingWrite(
+				HTraceLogging_SteamNetworkingSockets,
+				"Spew",
+				TraceLoggingLevel( WINEVENT_LEVEL_INFO ),
+				TraceLoggingString( buf, "Msg" )
+			);
+		}
+	}
 
 	// Spew to log file?
 	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_SYSTEMSPEW

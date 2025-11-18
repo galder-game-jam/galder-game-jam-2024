@@ -10,6 +10,10 @@
 //Interfaces
 #include "interfaces/system/IMapper.h"
 
+//Data
+#include "data/PlayerNetworkData.hpp"
+#include "data/ServerNetworkData.hpp"
+
 //Enums
 #include "enums/AnimationName.h"
 #include "enums/KeyboardKey.h"
@@ -44,6 +48,10 @@
 #include "managers/TextureManager.h"
 #include "managers/UserDataManager.hpp"
 #include "managers/WorldManager.h"
+
+//Network
+#include "network/GalderClient.hpp"
+#include "network/GalderServer.hpp"
 
 //System
 #include "system/World.h"

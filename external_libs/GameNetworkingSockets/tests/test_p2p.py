@@ -19,6 +19,7 @@ class RunProcessInThread(threading.Thread):
 
     def __init__( self, tag, cmdline, env, **popen_kwargs ):
         threading.Thread.__init__( self, name=tag )
+        self.daemon = True
         self.tag = tag
         self.cmdline = cmdline
         if env:
@@ -61,8 +62,9 @@ class RunProcessInThread(threading.Thread):
     # Wait for thread to shutdown.  Nuke process if we don't exit in time
     def join( self, timeout ):
         threading.Thread.join( self, timeout )
-        if self.isAlive():
+        if self.is_alive():
             self.WriteLn( "Still running after %d seconds.  Killing" % timeout )
+            global g_failed
             g_failed = True
             self.process.kill()
 
@@ -88,7 +90,7 @@ def StartClientInThread( role, local, remote ):
     ]
 
     env = dict( os.environ )
-    if os.name == 'nt' and not os.path.exists( 'steamnetworkingsockets.dll' ):
+    if os.name == 'nt' and not os.path.exists( 'steamnetworkingsockets.dll' ) and not os.path.exists( 'GameNetworkingSockets.dll' ):
         bindir = os.path.abspath('../../../bin')
         if not os.path.exists( bindir ):
             print( "Can't find steamnetworkingsockets.dll" )
